@@ -1,0 +1,3371 @@
+---
+title: "Social Values Relate to Search for Information in Social Money Allocation Tasks"
+date: "08/03/2026"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+---
+
+##### Author of script (Pilot Study & Study 1): Marc Jekel [marc.jekel@uni-koeln.de]
+##### Author of script (Study 2): Daria Lisovoj [daria.lisovoj@gmail.com]
+##### AI assistance: Claude (Claude Sonnet 5, Anthropic), accessed via Claude Code, assisted with combining and organizing the Pilot Study/Study 1 and Study 2 scripts into this single file.
+##### Reference (if published)
+##### OSF-link to study materials: https://osf.io/jpdzc/
+
+# Load libraries
+
+```{r}
+rm(list = ls())
+
+set.seed(1234)
+
+library("ggplot2")
+library("gridExtra")
+library("grid")
+library("readr")
+library("ggExtra")
+library("readxl")
+library("tidyverse")
+library("lme4")
+library("lmerTest")
+library("texreg")
+library("ggpubr")
+library("ggeffects")
+library("kableExtra")
+library("mediation")
+library("dplyr")
+
+## Sink any plot not explicitly saved to a named file (figures/*.pdf, opened
+## individually below via pdf()/dev.off()) into a null device instead of the
+## default "Rplots.pdf" that Rscript/knitr would otherwise create in the
+## project root for every ad-hoc plot() / ggplot() / barplot() call.
+pdf(file = NULL)
+
+sessionInfo()
+
+```
+
+# Pilot Study
+
+## Read in data
+
+```{r}
+dats_s1 = read.csv2("data/data_study_1.csv")
+```
+
+## Tasks social value orientation
+
+```{r}
+
+tasks_svo = 
+  rbind(
+    c(1.50,2.60,2.10,2.10),
+    c(0,-3,-0.80,-2.90),
+    c(3,0,2.90,-0.80),
+    c(-2.90,.80,-2.6,1.5),
+    c(-2.6,-1.5,-2.9,-.8),
+    c(-.8,2.9,0,3),
+    c(0,3,.8,2.9),
+    c(-.8,-2.9,-1.5,-2.6),
+    c(.8,-2.9,0,-3),
+    c(2.1,-2.1,1.5,-2.6),
+    c(2.9,-.8,2.6,-1.5),
+    c(-2.1,-2.1,-2.6,-1.5),
+    c(2.9,.8,3,0),
+    c(-1.5,-2.6,-2.1,-2.1),
+    c(-2.1,2.1,-1.5,2.6),
+    c(.8,2.9,1.5,2.6),
+    c(2.6,-1.5,2.1,-2.1),
+    c(-1.5,2.6,-.8,2.9),
+    c(1.5,-2.6,.8,-2.9),
+    c(-3,0,-2.9,.8),
+    c(2.6,1.5,2.9,.8),
+    c(-2.6,1.5,-2.1,2.1),
+    c(2.1,2.1,2.6,1.5),
+    c(-2.9,-.8,-3,0)
+  )
+
+colnames(tasks_svo) = c("self_1","other_1","self_2","other_2")
+
+SVO_choice = dats_s1[,13:36]
+SVO_choice = matrix(unlist(SVO_choice),ncol=ncol(SVO_choice))
+colnames(SVO_choice) = paste("SVO_",1:24,sep="")
+
+```
+
+## Angle social value orientation
+
+```{r}
+
+SVO_part = numeric()
+
+self_other_weights = numeric()
+
+for(loopP in 1 : nrow(dats_s1)){
+  
+  tasks_svo_p = numeric()
+  
+  for(loopT in 1 : 24){
+    
+    if(SVO_choice[loopP,loopT] == 1){
+      pickPart =   c(1,2)
+    } else {
+      pickPart = c(3,4)
+    }
+    
+    tasks_svo_p = rbind(tasks_svo_p,
+                        tasks_svo[loopT,pickPart])
+    
+  }
+  
+  self_other_mean= colSums(tasks_svo_p)
+  
+  self_other_weights = rbind(self_other_weights,self_other_mean)
+  
+  SVO_part = c(SVO_part,
+               atan(self_other_mean[2]/self_other_mean[1])*180/pi)
+}
+
+### remove all participants with atan(0/0)
+
+SVO_part[which(rowSums(round(self_other_weights,5) == 0) == 2)] = NA
+
+SVO_part_pl = data.frame(SVO_part)
+
+ggplot(SVO_part_pl, aes(x=SVO_part)) + geom_histogram() + 
+  labs(x = "Social value orientation")  +
+  scale_x_continuous(breaks = seq(-90, 90, by=10))
+
+dats_s1 = dats_s1[is.na(SVO_part)==FALSE,]
+
+self_other_weights = self_other_weights[is.na(SVO_part)==FALSE,]
+
+SVO_part = SVO_part[is.na(SVO_part)==FALSE]
+
+mean(SVO_part)
+sd(SVO_part)
+
+n = length(SVO_part)
+
+round(sum(SVO_part >= -22.5 & SVO_part <= 22.5)/n,2)
+round(sum(SVO_part > 22.5 & SVO_part <= 67.5)/n,2)
+
+round(sum(round(SVO_part,5) == 0) / n,2)
+round(sum(round(SVO_part,5) == 45) / n,2)
+
+```
+
+## Demographics
+
+### Number of participants
+
+```{r}
+
+n_part_s1 = nrow(dats_s1)
+n_part_s1
+
+```
+
+### Age
+
+```{r}
+age = dats_s1$v_132_alter
+mean(age)
+sd(age)
+```
+
+### Gender
+
+```{r}
+
+# 1 = female, 2 = male, 3 = diverse
+
+gender = dats_s1$v_133_Geschlecht
+table(gender)
+
+```
+
+
+## Tasks with concealed information
+
+```{r}
+
+tasks = rbind(
+  
+  c(1.16,NA,.80, 1.50,NA,0),
+  c(NA,1.94,1.14,2.33,NA,0.34),
+  c(1.53,NA,2.17,NA,2.14,1.37),
+  c(0.16,NA,3.25,0.38,NA,2.45),
+  c(NA,4.44,4.06,NA,5.58,3.26),
+  c(2.74,NA,5.13,3,NA,4.33),
+  c(7.29,NA,5.93,NA,7.61,5.13),
+  c(9.01,NA,7.28,NA,9.20,6.48),
+  c(NA,0.18, 1.5,0.33,NA,0.8),
+  c(NA,0.91,1.84,1.03,NA,1.14),
+  c(2.35,NA,2.87,NA,4.23,2.17),
+  c(1.19,NA,3.99,0.99,NA,3.25),
+  c(2.23,NA,4.76,NA,1.35,3.60),
+  c(NA,6.59,5.83,NA,7.09,5.13),
+  c(NA,7.12,6.63,NA,7.68,5.93),
+  c(NA,8.27,7.98,NA,8.76,7.28),
+  c(0.86,NA,2.26,1.04,NA,1.19),
+  c(1.30,NA,2.44,NA,2.80,1.84),
+  c(3.40,NA,3.47,3.26,NA,2.87),
+  c(1.86,NA,4.30,NA,1.25,3.40),
+  c(3.51,NA,5.36,5.75,NA,4.76),
+  c(NA,5.10,6.43,6.52,NA,5.83),
+  c(4.60,NA,7.23,NA,6.81,6.63),
+  c(7.79,NA,8.57,NA,8.79,7.98)
+)
+
+colnames(tasks) = c("self_1_1","self_1_2","other_1",
+                    "self_2_1","self_2_2","other_2")
+
+tasks_compl = rbind(
+  
+  c(1.16,1.74,.80, 1.50,1.50,0),
+  c(1.30,1.94,1.14,2.33,1.01,0.34),
+  c(1.53,2.74,2.17,2.23,2.14,1.37),
+  c(0.16,5.19,3.25,0.38,5.07,2.45),
+  c(1.48,4.44,4.06,0.54,5.58,3.26),
+  c(2.74,4.49,5.13,3,3,4.33),
+  c(7.29,0.34,5.93,0.16,7.61,5.13),
+  c(9.01,0.27,7.28,0.28,9.20,6.48),
+  c(2.42,0.18, 1.5,0.33,2.57,0.8),
+  c(2.03,0.91,1.84,1.03,2.21,1.14),
+  c(2.35,1.62,2.87,0.04,4.23,2.17),
+  c(1.19,3.89,3.99,0.99,3.88,3.25),
+  c(2.23,2.96,4.76,3.51,1.35,3.60),
+  c(0.54,6.59,5.83,0.16,7.09,5.13),
+  c(0.61,7.12,6.63,0.40,7.68,5.93),
+  c(0.81,8.27,7.98,0.62,8.76,7.28),
+  c(0.86,1.34,2.26,1.04,1.33,1.19),
+  c(1.30,1.32,2.44,0.14,2.80,1.84),
+  c(3.40,0.41,3.47,3.26,0.71,2.87),
+  c(1.86,4.69,4.30,5.44,1.25,3.40),
+  c(3.51,2.19,5.36,5.75,0.11,4.76),
+  c(1.93,5.10,6.43,6.52,0.41,5.83),
+  c(4.60,2.55,7.23,0.44,6.81,6.63),
+  c(7.79,1.49,8.57,0.56,8.79,7.98)
+)
+
+colnames(tasks_compl) = c("self_1_1","self_1_2","other_1",
+                          "self_2_1","self_2_2","other_2")
+
+tasks_compl = data.frame(tasks_compl)
+
+own_o1 = rowSums(tasks_compl[,1:2])
+own_o2 = rowSums(tasks_compl[,3:4])
+
+t.test(own_o1,own_o2,var.equal = T)
+t.test(tasks_compl$other_1,tasks_compl$other_2,
+       var.equal=T)
+
+```
+
+## Attraction Search Effect
+
+```{r}
+
+ASE = dats_s1[,39:110]
+
+ASE = ASE[,seq(1,72,3)]
+ASE = matrix(unlist(ASE),ncol=ncol(ASE))
+ASE = ifelse(ASE == 4,1,ASE)
+ASE = ifelse(ASE == 3,2, ASE)
+
+codeSocial = c(2,2,2,2,2,
+               2,2,2,2,2,
+               2,2,2,2,2,
+               2,2,2,2,2,
+               2,2,2,2)
+
+ASE_pros = numeric()
+
+for(loop in 1 : nrow(ASE)){
+  
+  ASE_pros = rbind(ASE_pros,ifelse(ASE[loop,] == codeSocial, 1, 0))
+}
+
+search_own_study_1 = ASE_pros
+
+search_nondiag_study_1 = ASE_pros[,c(12,13,19,20)]
+
+ASE_pros = ASE_pros[,-c(12,13,19,20)]
+
+indiv_search = ASE_pros 
+
+table_perc_search_s1 = cbind(indiv_search,search_nondiag_study_1)
+table_perc_search_s1 = round(100-colMeans(table_perc_search_s1) * 100)
+
+ASE_pros_m = data.frame(100*rowMeans(ASE_pros))
+colnames(ASE_pros_m) = "pros"
+
+ASE_pros_m = unlist(ASE_pros_m)
+
+ASE_pros_m_pl = data.frame(ASE_pros_m)
+
+ggplot(ASE_pros_m_pl, aes(x=ASE_pros_m)) + geom_histogram() + 
+  labs(x = "Percentage search for option with higher self-outcome") 
+
+mean(ASE_pros_m)
+sd(ASE_pros_m)
+
+t.test(ASE_pros_m,mu=50)
+
+
+```
+
+## Correlation between SVO and ASE
+
+```{r}
+
+res = data.frame("ASE_pros_m"=ASE_pros_m,"SVO_part"=SVO_part)
+
+cor.test(res$SVO_part,res$ASE_pros_m,method = "spearman", alternative = "less")
+```
+
+```{r, fig.width=10,fig.height=7}
+#### final plot ####
+
+rect00 <- data.frame(x1=-90, x2=-67.5, y1=-Inf, y2=Inf)
+rect0 <- data.frame (x1=-67.5, x2=-22.5, y1=-Inf, y2=Inf)
+rect1 <- data.frame (x1=-22.5, x2=22.5, y1=-Inf, y2=Inf)
+rect2 <- data.frame (x1=22.5, x2=67.5, y1=-Inf, y2=Inf)
+rect3 <- data.frame (x1=67.5, x2=90, y1=-Inf, y2=Inf)
+
+scatterP<- ggplot(data = res, aes(x = SVO_part, y = ASE_pros_m)) + 
+  geom_segment(aes(x=-90,xend=90,y=50,yend=50), color = "black", size=.5)+
+  geom_segment(aes(x=-90,xend=-90,y=-3,yend=100), color = "black", size=.3,linetype="dotted")+
+  geom_segment(aes(x=-45,xend=-45,y=-3,yend=100), color = "black", size=.3,linetype="dotted")+
+  geom_segment(aes(x=0,xend=0,y=-3,yend=100), color = "black", size=.3,linetype="dotted")+
+  geom_segment(aes(x=45,xend=45,y=-3,yend=100), color = "black", size=.3,linetype="dotted")+
+  geom_segment(aes(x=90,xend=90,y=-3,yend=100), color = "black", size=.3,linetype="dotted")+
+  geom_segment(aes(x=-90,xend=90,y=25,yend=25), color = "black", size=.3,linetype="dotted")+
+  geom_segment(aes(x=-90,xend=90,y=75,yend=75), color = "black", size=.3,linetype="dotted")+
+  geom_smooth(data = res, aes(x = SVO_part, y = ASE_pros_m),
+              method = "lm", se = FALSE, lwd = 1, inherit.aes = FALSE,
+              col ="grey")+
+  geom_count() +
+  scale_size_area(max_size=8, breaks = function(x) { b <- unique(round(scales::extended_breaks()(x))); b[b > 0] }) +
+  labs(x = "Social value orientation", 
+       y = "Percentage of search for option with higher own payoff",
+       color="Search bias")  +
+  scale_x_continuous(limits=c(-90,90),breaks=c(-90,-67.5,-45,-22.5,0,22.5,45,67.5,90)) + 
+  scale_y_continuous(limits=c(-5,100),breaks=c(0,10,20,30,40,50,60,70,80,90,100)) + 
+  annotate(geom="text", x=-90, y=-5, label="sadistic",
+           color="black")+
+  annotate(geom="text", x=-45, y=-5, label="competitive",
+           color="black")+
+  annotate(geom="text", x=45, y=-5, label="cooperative",
+           color="black")+
+  annotate(geom="text", x=0, y=-5, label="individualistic",
+           color="black")+
+  annotate(geom="text", x=90, y=-5, label="altruistic",
+           color="black")+
+  geom_rect(data=rect00, mapping=aes(xmin =x1, 
+                                     xmax=x2, 
+                                     ymin=y1, 
+                                     ymax=y2),
+            fill="white", alpha=0.3, inherit.aes = FALSE) +
+  geom_rect(data=rect0, mapping=aes(xmin =x1, 
+                                    xmax=x2, 
+                                    ymin=y1, 
+                                    ymax=y2),
+            fill="grey", alpha=0.3, inherit.aes = FALSE) +
+  geom_rect(data=rect1, mapping=aes(xmin =x1, 
+                                    xmax=x2, 
+                                    ymin=y1, 
+                                    ymax=y2),
+            fill="white", alpha=0.3, inherit.aes = FALSE) +
+  geom_rect(data=rect2, mapping=aes(xmin =x1, 
+                                    xmax=x2, 
+                                    ymin=y1, 
+                                    ymax=y2),
+            fill="grey", alpha=0.3, inherit.aes = FALSE)+
+  geom_rect(data=rect3, mapping=aes(xmin =x1, 
+                                    xmax=x2, 
+                                    ymin=y1, 
+                                    ymax=y2),
+            fill="white", alpha=0.3, inherit.aes = FALSE)+
+  scale_color_manual(values = c("red", "chartreuse4")) +
+  theme_bw()
+
+pdf("figures/study_1_main.pdf",pagecentre=T, width=10,height=7 ,paper = "special")
+
+ggMarginal(scatterP, type="densigram")
+dev.off()
+
+ggMarginal(scatterP, type="densigram")
+
+```
+
+## Test of individuals
+
+```{r}
+# Restored from the pre-merge script (/Users/mjekel/git/svo_ase/SVO_ASE_SCRIPT.html),
+# where this used a >=45/<45 SVO-angle threshold split with inclusive >=75/<=25
+# bias cutoffs; the merge had accidentally substituted the SVO-type (22.5/67.5)
+# boundaries used elsewhere, with non-inclusive >75/<25 cutoffs.
+
+coop_above = mean(res$ASE_pros_m[res$SVO_part>=45]  >= 75)
+coop_below = mean(res$ASE_pros_m[res$SVO_part>=45]  <= 25)
+coop_above
+coop_below
+1 - coop_above - coop_below
+
+indiv_above = mean(res$ASE_pros_m[res$SVO_part<45] >= 75)
+indiv_below = mean(res$ASE_pros_m[res$SVO_part<45] <= 25)
+indiv_above
+indiv_below
+1 - indiv_above - indiv_below
+
+binom.test(5,20,.5)
+
+```
+
+## Multilevel regression models
+
+```{r}
+indiv_search = c(indiv_search)
+
+tasks = data.frame(tasks)
+
+SVO_tasks_2_single = 
+  data.frame(rowSums(cbind(tasks$self_1_1, tasks$self_1_2),na.rm=T),
+             tasks$other_1,
+             rowSums(cbind(tasks$self_2_1, tasks$self_2_2),na.rm=T),
+             tasks$other_2)
+
+colnames(SVO_tasks_2_single) = c("S_1_1","O_1","S_2_1","O_2")
+
+self_ratio =   (SVO_tasks_2_single$S_2_1 / SVO_tasks_2_single$S_1_1)
+other_ratio =  (SVO_tasks_2_single$O_1 / SVO_tasks_2_single$O_2)
+
+other_ratio[1] = NA
+
+incl = rep(1,24) 
+incl[c(12,13,19,20)] = 0
+
+self_ratio = self_ratio[incl==1]
+other_ratio = other_ratio[incl==1]
+
+dats_analy = data.frame("id"=rep(1:n_part_s1,20),
+                        "search"=indiv_search,
+                        "SVO"=rep(SVO_part,20),
+                        "Own" = rep(self_ratio,each=n_part_s1),
+                        "Other" = rep(other_ratio,each=n_part_s1)
+)
+
+
+mean_svo = mean(dats_analy$SVO)
+
+mean_self = mean(dats_analy$Own)
+sd_self = sd(dats_analy$Own)
+
+mean_other = mean(dats_analy$Other,na.rm=T)
+sd_other = sd(dats_analy$Other,na.rm=T)
+
+
+dats_analy$SVO = dats_analy$SVO - mean(dats_analy$SVO)
+dats_analy$Own = dats_analy$Own - mean(dats_analy$Own,na.rm=T)
+dats_analy$Other= dats_analy$Other - mean(dats_analy$Other,na.rm=T)
+
+mod = list()
+mod_expl = list()
+
+mod[1] = glmer(search ~ SVO  + (1|id),data=dats_analy,
+               family = "binomial")
+
+mod_expl[1] = glmer(search ~ SVO* Own +SVO*Other+(1|id),data=dats_analy,
+                    family = "binomial")
+
+```
+
+
+```{r, results = 'asis'}
+
+names_mod = c("Intercept","SVO")
+
+htmlreg(mod, custom.coef.names=names_mod,digits=3)
+
+```
+
+
+## Correlation between ASE, SVO, and choice
+
+```{r}
+
+choice_s_1 = dats_s1[,39:110]
+choice_s_1 = (choice_s_1[,-seq(1,72,3)])
+choice_s_1 = matrix(ifelse(unlist(choice_s_1) == -77,0,
+                           unlist(choice_s_1)),ncol=ncol(choice_s_1))
+
+choice_s_1_single = numeric()
+
+for(loop_single in 1 : (ncol(choice_s_1)/2)){
+  
+  choice_s_1_single = cbind(choice_s_1_single,
+                            rowSums(choice_s_1[,(1:2)+(2*(loop_single-1))]))
+  
+}
+
+choice_s_1_single = ifelse(choice_s_1_single == 4,1,choice_s_1_single)
+choice_s_1_single = ifelse(choice_s_1_single == 3,2,choice_s_1_single)
+choice_s_1_single = ifelse(choice_s_1_single == 2,1,0)
+colnames(choice_s_1_single) = paste("item",1:24,sep="")
+choice_s_1_single_diagn = choice_s_1_single[,-c(12,13,19,20)]
+
+round(100 * table(c(ASE_pros),c(choice_s_1_single_diagn))/sum(table(c(ASE_pros),
+                                                                    c(choice_s_1_single_diagn))))
+
+
+cor.test(res$ASE_pros_m,rowMeans(choice_s_1_single_diagn),method = "spearman")
+cor.test(res$SVO_part,rowMeans(choice_s_1_single_diagn),method = "spearman")
+
+med_data = data.frame("choice" = rowMeans(choice_s_1_single_diagn),
+            "SVO" = res$SVO_part,
+            "ASE" = res$ASE_pros_m)
+
+fit.mediator=lm(ASE~SVO,data=med_data)
+fit.dv=lm(choice~SVO+ASE,data=med_data)
+
+results = mediate(fit.mediator, fit.dv, treat="SVO", 
+                  mediator="ASE", boot=T)
+
+summary(results)
+
+```
+
+
+
+# Study 1
+
+## Read in data
+
+```{r}
+
+dats_s2_1 =  read_csv("data/data_study_2_session_1.csv")
+dats_s2_2 = read_csv("data/data_study_2_session_2.csv")
+
+```
+
+## Demographics
+
+### Number of participants
+
+```{r}
+
+n_part_s2 = nrow(dats_s2_1)
+n_part_s2
+
+```
+
+### Age
+
+```{r}
+dats_s2_1$Age = ifelse(dats_s2_1$Age == 999, NA, dats_s2_1$Age)
+
+age = dats_s2_1$Age
+mean(age, na.rm=T)
+sd(age, na.rm=T)
+```
+
+### Gender
+
+```{r}
+
+dats_s2_1$Sex = ifelse(dats_s2_1$Sex == "männlich", "male",dats_s2_1$Sex)
+dats_s2_1$Sex = ifelse(dats_s2_1$Sex == "weiblich", "female",dats_s2_1$Sex)
+dats_s2_1$Sex = ifelse(dats_s2_1$Sex == "divers", "diverse",dats_s2_1$Sex)
+dats_s2_1$Sex = ifelse(dats_s2_1$Sex == "möchte ich nicht angeben", "no answer",dats_s2_1$Sex)
+
+gender = dats_s2_1$Sex
+table(gender)
+
+```
+
+
+### Time difference in days between sessions
+
+```{r}
+
+start_date =  as.numeric(str_sub(dats_s2_1$StartDate,9,10))
+end_date = as.numeric( str_sub(dats_s2_2$EndDate,9,10))
+end_date = ifelse(end_date<16,31+end_date,end_date)
+
+days = end_date - start_date 
+
+table(days)
+
+```
+
+
+## Session 1
+
+
+```{r}
+order_pres = dats_s2_1 %>% dplyr::select(contains("Trial"))
+
+order_pres = matrix(as.numeric(unlist(order_pres)),
+                    ncol = ncol(order_pres))
+
+order_options = dats_s2_1 %>% dplyr::select(
+  contains("Pres"))
+
+order_options = order_options[,2:ncol(order_options)]
+
+order_options = matrix(as.numeric(unlist(order_options)),
+                       ncol = ncol(order_options))
+
+choice = dats_s2_1 %>% dplyr::select(
+  contains("SVO_choice"))
+choice = ifelse(choice == "Linke Option",1,2)
+
+for(loop_part in 1 : nrow(dats_s2_1)){
+  for(loop_trial in 1 : 24){
+    
+    act_part = order_options[loop_part,order_pres[loop_part,]]
+    
+    if(act_part[loop_trial] == 0){
+      
+      choice[loop_part,loop_trial] = 
+        ifelse(choice[loop_part,loop_trial] == 2,1,2)
+    }
+  }
+}
+
+SVO_choice = choice
+```
+
+### Money first session
+
+```{r}
+random_SVO_1 = numeric()
+
+for(loop_part in 1 : nrow(SVO_choice)){
+  
+  pick_task = sample(1:24,1)
+  
+  act_choice_part = choice[loop_part,pick_task]
+  
+  ind_ch = c(1,2) + (act_choice_part-1) * 2
+  
+  random_SVO_1 = rbind(random_SVO_1,
+                       unlist(tasks_svo[pick_task,ind_ch]))
+  
+}
+
+random_SVO_1 = data.frame(random_SVO_1)
+colnames(random_SVO_1) = c("Own","Other")
+
+others = sample(1:nrow(dats_s2_1),nrow(dats_s2_1)/2)
+
+others = cbind(others,sample((1:nrow(dats_s2_1))[-others]))
+
+others = rbind(others,others[,2:1])
+others = others[order(others[,1]),]
+colnames(others) = c("key","target")
+others = data.frame(others)
+
+total_money_1 = numeric()
+
+for(loop_part in 1 : nrow(dats_s2_1)){
+  
+  total_money_1 = c(total_money_1,
+                    
+                    random_SVO_1$Own[loop_part] + 
+                      random_SVO_1$Other[others$target[loop_part]])
+  
+}
+
+```
+
+
+### Angle social value orientation
+
+```{r}
+
+SVO_part = numeric()
+SVO_tasks_1 = data.frame(tasks_svo)
+colnames(SVO_tasks_1) = c("S_1",	"O_1",	"S_2",	"O_2")
+
+SVO_tasks_1 = matrix(unlist(SVO_tasks_1),ncol = ncol(SVO_tasks_1))
+
+self_other_mean_all = numeric()
+
+for(loopP in 1 : nrow(dats_s2_1)){
+  
+  tasks_svo_p = numeric()
+  
+  for(loopT in 1 : 24){
+    
+    if(SVO_choice[loopP,loopT] == 1){
+      pickPart =   c(1,2)
+    } else {
+      pickPart = c(3,4)
+    }
+    
+    tasks_svo_p = rbind(tasks_svo_p,
+                        SVO_tasks_1[loopT,pickPart])
+    
+  }
+  
+  self_other_mean= colSums(tasks_svo_p)
+  
+  SVO_part = c(SVO_part,
+               atan(self_other_mean[2]/self_other_mean[1])*180/pi)
+  
+  self_other_mean_all = rbind(self_other_mean_all,self_other_mean)
+}
+
+
+SVO_part_pl = data.frame(SVO_part)
+
+ggplot(SVO_part_pl, aes(x=SVO_part)) + geom_histogram() + 
+  labs(x = "Social value orientation") +
+  scale_x_continuous(breaks = seq(-90, 90, by=10))
+
+mean(SVO_part)
+sd(SVO_part)
+
+n = length(SVO_part)
+
+round(sum(SVO_part >= -22.5 & SVO_part <= 22.5)/n,2)
+round(sum(SVO_part > 22.5 & SVO_part <= 67.5)/n,2)
+
+# Rounded before the equality check (as in the Pilot Study's version of this
+# same computation above): SVO_part is computed via atan(...)*180/pi, so a
+# participant whose true angle is exactly 0 or 45 degrees can land at e.g.
+# -1.48e-14 instead of exact 0 due to floating-point arithmetic, silently
+# failing an unrounded `== 0`/`== 45` equality check.
+sum(round(SVO_part,5) == 0) / n
+sum(round(SVO_part,5) == 45) / n
+
+```
+
+## Session 2
+
+### Tasks with concealed information
+
+```{r}
+SVO_tasks_2 = rbind(
+  c(1.16,1.74,0.8,1.5,1.5,0),
+  c(1.94,1.3,1.14,2.33,1.01,0.34),
+  c(1.53,2.74,2.17,2.14,2.23,1.37),
+  c(0.08,2.6,1.63,0.19,2.54,1.23),
+  c(2.22,0.74,2.03,2.79,0.27,1.63),
+  c(1.37,2.25,2.57,1.5,2.17,2.17),
+  c(3.65,0.17,2.97,3.81,0.08,2.57),
+  c(4.51,0.14,3.64,4.6,0.14,3.24),
+  c(0.18,2.42,1.5,0.33,2.57,0.8),
+  c(0.91,2.03,1.84,1.03,2.21,1.14),
+  c(2.35,1.62,2.87,4.23,0.04,2.17),
+  c(1.19,3.89,3.99,0.99,3.88,3.25),
+  c(2.23,2.96,4.76,1.35,3.51,3.6),
+  c(3.3,0.27,2.92,3.55,0.08,2.57),
+  c(3.56,0.31,3.32,3.84,0.2,2.97),
+  c(2.07,0.2,2,2.19,0.16,1.82),
+  c(0.86,1.34,2.26,1.04,1.33,1.19),
+  c(1.3,1.32,2.44,2.8,0.14,1.84),
+  c(3.4,0.41,3.47,3.26,0.71,2.87),
+  c(0.93,2.35,2.15,0.63,2.72,1.7),
+  c(3.51,2.19,5.36,5.75,0.11,4.76),
+  c(2.55,0.97,3.22,3.26,0.21,2.92),
+  c(2.3,1.28,3.62,3.41,0.22,3.32),
+  c(3.9,0.75,4.29,4.4,0.28,3.99)
+)
+
+
+SVO_tasks_2 = data.frame(SVO_tasks_2)
+
+colnames(SVO_tasks_2) = c("S_1_1",	"S_1_2"	,"O_1",	"S_2_1"	,"S_2_2",	"O_2")
+
+tasks_svo_table_3 = SVO_tasks_2
+```
+
+### Total money
+
+
+```{r}
+
+SVO_tasks_2
+
+SVO_tasks_2_single = SVO_tasks_2
+
+SVO_tasks_2 = data.frame(
+  
+  SVO_tasks_2$S_1_1 + SVO_tasks_2$S_1_2,SVO_tasks_2$O_1,
+  SVO_tasks_2$S_2_1+SVO_tasks_2$S_2_2,SVO_tasks_2$O_2)
+
+colnames(SVO_tasks_2) = c("S_1","O_1","S_2","O_2")
+
+t.test(SVO_tasks_2$S_1,SVO_tasks_2$S_2,var.equal=T)
+t.test(SVO_tasks_2$O_1,SVO_tasks_2$O_2,var.equal = T)
+
+###
+
+random_SVO_2 = numeric()
+
+for(loop_part in 1 : nrow(dats_s2_2)){
+  
+  pick_task = sample(1:24,1)
+  
+  act_choice_part = choice[loop_part,pick_task]
+  
+  ind_ch = c(1,2) + (act_choice_part-1) * 2
+  
+  random_SVO_2 = rbind(random_SVO_2,
+                       unlist(SVO_tasks_2[pick_task,ind_ch]))
+  
+}
+
+random_SVO_2 = data.frame(random_SVO_2)
+colnames(random_SVO_2) = c("Own","Other")
+
+others = sample(1:nrow(dats_s2_2),nrow(dats_s2_2)/2)
+
+others = cbind(others,sample((1:nrow(dats_s2_2))[-others]))
+
+others = rbind(others,others[,2:1])
+others = others[order(others[,1]),]
+colnames(others) = c("key","target")
+others = data.frame(others)
+
+total_money_2 = numeric()
+
+for(loop_part in 1 : nrow(dats_s2_2)){
+  
+  total_money_2 = c(total_money_2,
+                    
+                    random_SVO_2$Own[loop_part] + 
+                      random_SVO_2$Other[others$target[loop_part]])
+  
+}
+
+total_money = 3 + total_money_1 + total_money_2
+total_money = ifelse(total_money<3,3,total_money)
+
+mean(total_money)
+sd(total_money)
+
+total_money = data.frame(total_money)
+
+ggplot(total_money, aes(x=total_money)) + geom_histogram() + 
+  labs(x = "Earned money in Euro") +
+  scale_y_continuous(breaks = seq(0, 20, by=1)) +
+  scale_x_continuous(breaks = seq(0, 20, by=1))
+
+
+```
+
+
+### Attraction Search Effect
+
+```{r}
+
+order_pres = dats_s2_2 %>% dplyr::select(
+  contains("Trial"))
+order_pres = matrix(as.numeric(unlist(order_pres)),
+                    ncol = ncol(order_pres))
+
+order_options = dats_s2_2 %>% dplyr::select(
+  contains("Pres"))
+
+order_options = order_options[,1:24]
+
+order_options = matrix(as.numeric(unlist(order_options)),
+                       ncol = ncol(order_options))
+
+choice = dats_s2_2 %>% dplyr::select(
+  contains("SVO_choice"))
+choice = ifelse(choice == "Linke Option",1,2)
+
+search = dats_s2_2  %>% dplyr::select(
+  contains("search") & !contains("Time") &  !contains("example")
+)
+
+search = ifelse(search == "Verdeckter Betrag der linken Option",1,2)
+
+pref_ratings = 
+dats_s2_2 %>% dplyr::select(
+  contains("_SVO_pref_1"))
+
+for(loop_part in 1 : nrow(dats_s2_2)){
+  for(loop_trial in 1 :24){
+    
+    act_part = order_options[loop_part,][order_pres[loop_part,]]
+    
+    if(act_part[loop_trial] == 0){
+      
+      choice[loop_part,loop_trial] = 
+        ifelse(choice[loop_part,loop_trial] == 2,1,2)
+      
+      search[loop_part,loop_trial] = 
+        ifelse(search[loop_part,loop_trial] == 2,1,2)
+      
+      pref_ratings[loop_part,loop_trial] =  -1 * pref_ratings[loop_part,loop_trial]
+      
+    }
+  }
+}
+
+incl = (cbind(SVO_tasks_2_single$S_1_1 > SVO_tasks_2_single$S_2_1,
+              SVO_tasks_2_single$O_1 > SVO_tasks_2_single$O_2))
+
+incl = ifelse(rowSums(incl)==1,1,0)
+
+search_nondiag_study_2 = ifelse(search == 2,1,0)
+search_nondiag_study_2 = search_nondiag_study_2[,incl==0]
+
+search = search[,incl == 1]
+indiv_search = ifelse(search == 2,1,0)
+
+score_indiv_search = rowSums(indiv_search)
+
+score_indiv_search_pl = data.frame(100*score_indiv_search/20)
+
+ggplot(score_indiv_search_pl, aes(x=X100...score_indiv_search.20)) + geom_histogram() + 
+  labs(x = "Percentage search for option with higher self-outcome") 
+
+mean(unlist(score_indiv_search_pl))
+sd(unlist(score_indiv_search_pl))
+
+t.test(unlist(score_indiv_search_pl),mu=50)
+
+table_perc_search_s2 = cbind(indiv_search,search_nondiag_study_2)
+table_perc_search_s2 = round(100-colMeans(table_perc_search_s2) * 100)
+
+
+```
+
+## Correlation between ASE and SVO
+
+```{r}
+cor.test(SVO_part,score_indiv_search,method="spearman",alternative="less")
+cor.test(SVO_part,score_indiv_search)
+```
+
+### Correlation between SVO ring measure and SVO slider from Decision Lab Cologne
+
+```{r}
+SVO_dlc = read.csv("data/svo_dlc_study_2.csv")
+
+date_slider = SVO_dlc$Date
+date_slider = str_sub(date_slider, 1, 10)
+
+year =  as.numeric(str_sub(date_slider, 1, 4))
+month = as.numeric( str_sub(date_slider, 6,7))
+
+date_slider = data.frame(year,month)
+date_slider = date_slider[order(date_slider$year,date_slider$month),]
+
+date_slider = table(date_slider$year,date_slider$month)
+date_slider =cbind(date_slider,rowSums(date_slider ),rowSums(date_slider )/sum(date_slider))
+
+months_before = rbind(
+(7 +12 + c(12:10,8:1)),  
+(7 + c(12:10,8:1)),  
+(7 - c(1:8,10:12))
+)
+
+loop_count = 1
+indiv_mont = numeric()
+
+for(loop in c(date_slider[,1:11])){
+  
+  indiv_mont = c(indiv_mont, 
+                 rep(c(months_before)[loop_count],loop))
+  loop_count = loop_count + 1
+}
+
+mean(indiv_mont)
+median(indiv_mont)
+barplot(indiv_mont)
+sd(indiv_mont)
+
+cor.test(SVO_dlc$SVSangle,SVO_part)
+
+cor.test(SVO_dlc$SVSangle,SVO_part,method="spearman")
+
+SVOscales = data.frame(SVO_dlc$SVSangle,SVO_part)
+
+names(SVOscales) = c("SVO_slider","SVO_ring")
+
+ggplot(SVOscales,aes(x=SVO_ring,y=SVO_slider)) +  geom_count() +
+  labs(x = "SVO ring measure", 
+       y = "SVO slider")  +
+  geom_smooth(method = "lm")
+
+```
+
+### Correlation based on SVO slider from Decision Lab Cologne
+
+```{r}
+cor.test(SVO_dlc$SVSangle,score_indiv_search,method="spearman",alternative="less")
+cor.test(SVO_dlc$SVSangle,score_indiv_search,method="pearson",alternative="less")
+```
+
+### Correlation based on average between SVO ring measure form session 1 and SVO slider from Decision Lab Cologne
+
+```{r}
+SVO_average = ((SVO_part + SVO_dlc$SVSangle)/2)
+
+cor.test(SVO_average,score_indiv_search,method="spearman",alternative="less")
+cor.test(SVO_average,score_indiv_search,method="pearson",alternative="less")
+
+```
+
+## Condition preference assessment
+
+```{r}
+
+# 1 = with preference assessment befor search, 0 = without
+
+cond = dats_s2_2$preference
+cond = as.numeric(cond)
+
+table(cond)
+
+pref_ratings_sub = (pref_ratings[cond==1,1:20])
+pref_ratings_sub = data.frame(pref_ratings_sub)
+
+indiv_search_with_pref = indiv_search[cond==1,]
+
+SVO_part_with_pred = SVO_part[cond==1]
+
+indiv_search_with_pref_vector = c(t(indiv_search_with_pref))
+pref_ratings_vector = c(t(pref_ratings_sub))
+pref_ratings_vector = pref_ratings_vector - mean(pref_ratings_vector)
+pref_ratings_vector = pref_ratings_vector / sd(pref_ratings_vector)
+partic_indic = rep(1:nrow(indiv_search_with_pref),each=20)
+
+mod = glmer(indiv_search_with_pref_vector ~ pref_ratings_vector + (1|partic_indic),
+              family = "binomial")
+
+summary(mod)
+
+
+```
+
+### Correlation per condition
+
+```{r}
+cor.test(SVO_part[cond==1],score_indiv_search[cond==1],method="spearman",alternative="less")
+cor.test(SVO_part[cond==0],score_indiv_search[cond==0],method="spearman",alternative="less")
+```
+
+## Plot Correlation between SVO and ASE
+
+```{r}
+ASE_pros_m = c(100*score_indiv_search/20)
+res_fin = data.frame("ASE_pros_m"=ASE_pros_m,"SVO_part"=SVO_part,
+                     "cond"=cond)
+
+res_fin$cond = as.factor(res_fin$cond)
+levels(res_fin$cond) = c("No","Yes")
+
+rect00 <- data.frame(x1=-90, x2=-67.5, y1=-Inf, y2=Inf)
+rect0 <- data.frame (x1=-67.5, x2=-22.5, y1=-Inf, y2=Inf)
+rect1 <- data.frame (x1=-22.5, x2=22.5, y1=-Inf, y2=Inf)
+rect2 <- data.frame (x1=22.5, x2=67.5, y1=-Inf, y2=Inf)
+rect3 <- data.frame (x1=67.5, x2=90, y1=-Inf, y2=Inf)
+
+scatterP<- ggplot(data = res_fin, aes(x = SVO_part, y = ASE_pros_m)) + 
+  geom_segment(aes(x=-90,xend=90,y=50,yend=50), color = "black", size=.5)+
+  geom_segment(aes(x=-90,xend=-90,y=-3,yend=100), color = "black", size=.3,linetype="dotted")+
+  geom_segment(aes(x=-45,xend=-45,y=-3,yend=100), color = "black", size=.3,linetype="dotted")+
+  geom_segment(aes(x=0,xend=0,y=-3,yend=100), color = "black", size=.3,linetype="dotted")+
+  geom_segment(aes(x=45,xend=45,y=-3,yend=100), color = "black", size=.3,linetype="dotted")+
+  geom_segment(aes(x=90,xend=90,y=-3,yend=100), color = "black", size=.3,linetype="dotted")+
+  geom_segment(aes(x=-90,xend=90,y=25,yend=25), color = "black", size=.3,linetype="dotted")+
+  geom_segment(aes(x=-90,xend=90,y=75,yend=75), color = "black", size=.3,linetype="dotted")+
+  geom_smooth(data = res_fin, aes(x = SVO_part, y = ASE_pros_m),
+              method = "lm", se = FALSE, lwd = 1, inherit.aes = FALSE,
+              col ="grey")+
+  geom_count() +
+  scale_size_area(max_size=8, breaks = function(x) { b <- unique(round(scales::extended_breaks()(x))); b[b > 0] }) +
+  labs(x = "Social value orientation", 
+       y = "Percentage of search of option with higher own payoff",
+       color="Search bias")  +
+  scale_x_continuous(limits=c(-90,90),breaks=c(-90,-67.5,-45,-22.5,0,22.5,45,67.5,90)) + 
+  scale_y_continuous(limits=c(-5,100),breaks=c(0,10,20,30,40,50,60,70,80,90,100)) + 
+  annotate(geom="text", x=-90, y=-5, label="sadistic",
+           color="black")+
+  annotate(geom="text", x=-45, y=-5, label="competitive",
+           color="black")+
+  annotate(geom="text", x=45, y=-5, label="cooperative",
+           color="black")+
+  annotate(geom="text", x=0, y=-5, label="individualistic",
+           color="black")+
+  annotate(geom="text", x=90, y=-5, label="altruistic",
+           color="black")+
+  geom_rect(data=rect00, mapping=aes(xmin =x1, 
+                                     xmax=x2, 
+                                     ymin=y1, 
+                                     ymax=y2),
+            fill="white", alpha=0.3, inherit.aes = FALSE) +
+  geom_rect(data=rect0, mapping=aes(xmin =x1, 
+                                    xmax=x2, 
+                                    ymin=y1, 
+                                    ymax=y2),
+            fill="grey", alpha=0.3, inherit.aes = FALSE) +
+  geom_rect(data=rect1, mapping=aes(xmin =x1, 
+                                    xmax=x2, 
+                                    ymin=y1, 
+                                    ymax=y2),
+            fill="white", alpha=0.3, inherit.aes = FALSE) +
+  geom_rect(data=rect2, mapping=aes(xmin =x1, 
+                                    xmax=x2, 
+                                    ymin=y1, 
+                                    ymax=y2),
+            fill="grey", alpha=0.3, inherit.aes = FALSE)+
+  geom_rect(data=rect3, mapping=aes(xmin =x1, 
+                                    xmax=x2, 
+                                    ymin=y1, 
+                                    ymax=y2),
+            fill="white", alpha=0.3, inherit.aes = FALSE)+
+  theme_bw()
+
+
+scatterP_g<- ggplot(data = res_fin, aes(x = SVO_part, y = ASE_pros_m, col = cond)) + 
+  geom_smooth(data = res_fin, aes(x = SVO_part, y = ASE_pros_m, col = cond),
+              method = "lm", se = FALSE, lwd = 1)+
+  geom_count() +
+  scale_size_area(max_size=8, breaks = function(x) { b <- unique(round(scales::extended_breaks()(x))); b[b > 0] }) +
+  labs(x = "Social value orientation", 
+       y = "Percentage of search of option with higher own payoff",
+       color="Preference\nassessment")  +
+  scale_x_continuous(limits=c(-24,67.5),breaks=c(-90,-67.5,-45,-22.5,0,22.5,45,67.5,90)) + 
+  scale_y_continuous(limits=c(-5,100),breaks=c(0,10,20,30,40,50,60,70,80,90,100)) + 
+  annotate(geom="text", x=-90, y=-5, label="sadistic",
+           color="black")+
+  annotate(geom="text", x=-45, y=-5, label="competitive",
+           color="black")+
+  annotate(geom="text", x=45, y=-5, label="cooperative",
+           color="black")+
+  annotate(geom="text", x=0, y=-5, label="individualistic",
+           color="black")+
+  annotate(geom="text", x=90, y=-5, label="altruistic",
+           color="black")+
+  scale_color_manual(values = c("grey75", "black")) +
+  theme_bw()
+
+pdf("figures/study_2_main.pdf",pagecentre=T, width=10,height=7 ,paper = "special")
+
+ggMarginal(scatterP, type="densigram")
+dev.off()
+
+pdf("figures/study_2_sub.pdf",pagecentre=T, width=10,height=7 ,paper = "special")
+
+ggMarginal(scatterP_g, type="boxplot", groupColour=T,size=8)
+
+dev.off()
+```
+
+### Overall plot
+
+```{r, fig.width=10,fig.height=7}
+ggMarginal(scatterP, type="densigram") 
+
+##
+```
+
+### Plot separated by assessment condition
+
+```{r, fig.width=10,fig.height=7}
+
+
+ggMarginal(scatterP_g, type="boxplot", groupColour=T,size=8)
+```
+
+
+## Test of individuals
+
+```{r}
+# Restored from the pre-merge script (/Users/mjekel/git/svo_ase/SVO_ASE_SCRIPT.html),
+# where this used a >=45/<45 SVO-angle threshold split with inclusive >=75/<=25
+# bias cutoffs; the merge had accidentally substituted the SVO-type (22.5/67.5)
+# boundaries used elsewhere, with non-inclusive >75/<25 cutoffs, which changes
+# both the grouping and the classification and no longer reproduces the
+# manuscript's reported Study 1 individual-level percentages.
+
+coop_above = mean(res_fin$ASE_pros_m[res_fin$SVO_part>=45]  >= 75)
+coop_below = mean(res_fin$ASE_pros_m[res_fin$SVO_part>=45]  <= 25)
+coop_above
+coop_below
+1 - coop_above - coop_below
+
+indiv_above = mean(res_fin$ASE_pros_m[res_fin$SVO_part<45] >= 75)
+indiv_below = mean(res_fin$ASE_pros_m[res_fin$SVO_part<45] <= 25)
+indiv_above
+indiv_below
+1 - indiv_above - indiv_below
+
+binom.test(5,20,.5)
+
+```
+
+## Multilevel regression models
+
+```{r}
+indiv_search = c(indiv_search)
+
+self_ratio =   SVO_tasks_2_single$S_2_1 / SVO_tasks_2_single$S_1_1
+other_ratio =  SVO_tasks_2_single$O_1 / SVO_tasks_2_single$O_2
+other_ratio[1] = NA
+
+self_ratio = self_ratio[incl==1]
+other_ratio = other_ratio[incl==1]
+
+dats_analy = data.frame("id"=rep(1:n_part_s2,20),
+                        "search"=indiv_search,
+                        "SVO"=rep(SVO_part,20),
+                        "Pref" = rep(cond,20),
+                        "Own" = rep(self_ratio,each=n_part_s2),
+                        "Other" = rep(other_ratio,each=n_part_s2)
+)
+
+
+dats_analy$Pref = as.factor(dats_analy$Pref)
+levels(dats_analy$Pref) = c("without","with")
+contrasts(dats_analy$Pref) = contr.sum(2)
+contrasts(dats_analy$Pref) = contrasts(dats_analy$Pref)[2:1]
+
+dats_analy_gg = dats_analy
+
+dats_analy$SVO = dats_analy$SVO - mean(dats_analy$SVO)
+dats_analy$Own = dats_analy$Own - mean(dats_analy$Own,na.rm=T)
+dats_analy$Other= dats_analy$Other - mean(dats_analy$Other,na.rm=T)
+
+
+mod = list()
+
+mod[1] = glmer(search ~ SVO  + (1|id),data=dats_analy,
+               family = "binomial")
+
+mod[2] = glmer(search ~ SVO * Pref + (1|id),data=dats_analy,
+               family = "binomial")
+
+mod_expl[2] = glmer(search ~  SVO*Own +Other*SVO+(1|id),data=dats_analy,
+                    family = "binomial")
+```
+
+
+```{r, results = 'asis'}
+
+names_mod = c("Intercept","SVO", "Pref. assesm.", "SVO x Pref. assesm.")
+
+htmlreg(mod, custom.coef.names=names_mod,digits=3)
+
+summary( glmer(search ~ SVO * Pref + (1|id),data=dats_analy,
+               family = "binomial"))
+
+```
+
+```{r}
+texreg(mod, custom.coef.names=names_mod,digits=3)
+```
+
+### SVO Slider DLC
+
+
+```{r}
+
+
+dats_analy_dlc = cbind(dats_analy,SVO_dlc =SVO_dlc$SVSangle)
+
+dats_analy_dlc$SVO_dlc = dats_analy_dlc$SVO_dlc - mean(dats_analy_dlc$SVO_dlc)
+
+mod_dlc = list()
+
+mod_dlc[1] = glmer(search ~ SVO_dlc  + (1|id),data=dats_analy_dlc,
+               family = "binomial")
+
+mod_dlc[2] = glmer(search ~ SVO_dlc * Pref + (1|id),data=dats_analy_dlc,
+               family = "binomial")
+
+```
+
+
+```{r, results = 'asis'}
+
+names_mod = c("Intercept","SVO", "Pref. assesm.", "SVO x Pref. assesm.")
+
+htmlreg(mod_dlc, custom.coef.names=names_mod,digits=3)
+
+
+```
+
+
+## Correlation between ASE, SVO, and choice
+
+```{r}
+
+choice_s_2 = choice[,-c(12,13,19,20)]
+
+round(table(c(search),c(choice_s_2)) / sum(table(c(choice_s_2),c(search)) ) * 100)
+
+table(c(search),c(choice_s_2))
+
+choice_s_2_01 = ifelse(choice_s_2 == 2,1,0)
+
+cor.test(rowMeans(choice_s_2_01),score_indiv_search,method = "spearman")
+cor.test(rowMeans(choice_s_2_01),SVO_part,method = "spearman")
+
+med_data = data.frame("choice" = rowMeans(choice_s_2_01),
+            "SVO" = SVO_part,
+            "ASE" = score_indiv_search)
+
+library(mediation)
+
+fit.mediator=lm(ASE~SVO,data=med_data)
+fit.dv=lm(choice~SVO+ASE,data=med_data)
+
+results = mediate(fit.mediator, fit.dv, treat="SVO", 
+                  mediator="ASE", boot=T)
+
+summary(results)
+
+```
+
+
+
+
+# Study 2
+
+##### Author of Study 2 script sections: Daria Lisovoj [daria.lisovoj@gmail.com]
+
+## Load additional libraries
+
+```{r}
+library(readr)
+library(tidyverse)
+library(jsonlite)
+library(tidyr)
+library(dplyr)
+library(r2glmm)
+library(Hmisc)
+library(texreg)
+library(lubridate)
+library(lme4)
+library(lmerTest)
+library(statuser)
+library(ggplot2)
+library(ggExtra)
+#library(mediation)
+  sessionInfo()
+```
+
+## Read in data
+
+In line with our current data protection policies, participants' payouts were calculated prior to data anonymization and before creating this analysis script. Thus, all data used in this script are fully anonymized and cannot be traced back to individual participants.
+
+```{r}
+data_raw = read.csv("data/data_raw_all_anonymized_t2_search_study3.csv", sep = ";")
+demographics = read.csv("data/data_demo_all_anonymized_t2_search_study3.csv", sep = ";")
+
+```
+
+Additional demographic and SVO data from session 1 (t1):
+
+```{r}
+data_t1 = read.csv("data/data_demo_all_anonymized_t1_search_study3.csv", sep = ";")
+ring = read.csv("data/ring_responces_t1_study_3.csv", sep = ";")
+slider = read.csv("data/slider_responces_t1_study_3.csv", sep = ";")
+
+ring_items = read.csv("data/ring_items_ses1_study3.csv", sep = ",")
+slider_items = read.csv("data/slider_items_ses1_study3.csv", sep = ",")
+```
+
+```{r}
+# In t1, the same ID may correspond to multiple participations (e.g., if a participant started the study and stopped before reaching the task, for instance after switching devices).
+data_t1_all = data_t1
+data_t1 = subset(data_t1, data_t1$include_t1 == 1)
+```
+
+## Data preprocessing
+
+This section selects the columns relevant to the present analyses, removes irrelevant variables, and converts the data into the format used below.
+
+```{r}
+# Construct a unique participation identifier for each row. The survey software can assign identical subject IDs to different participants or participations (e.g., simultaneous starts, or a participant restarting after the welcome page), so a clear identifier is built manually for each participation.
+
+data_raw$row_nr <- row.names(data_raw)# row number, used as a unique row identifier
+uniqueID <- subset(data_raw, data_raw$sender_id == "0_0")# the first page each participant saw and started with
+uniqueID <- uniqueID%>%dplyr::select(row_nr)# keep only the column needed to build the identifier
+uniqueID$uniqueID <- 1:nrow(uniqueID)
+
+data <- left_join(data_raw, uniqueID, by = "row_nr")# the unique participation ID is now attached to the first row of each participation
+
+data <- data %>% fill(uniqueID)# carry the ID forward to the remaining rows of the same participation
+
+# Propagate participant-level variables recorded only once (strategy, general comments) to every row for that participant, filling both up and down within each uniqueID group.
+data = data %>% group_by(uniqueID) %>% fill(strategy, comment_general, .direction = "downup") %>% ungroup()
+```
+
+```{r}
+demographics$completion_time_min = as.numeric(sub(",", ".", demographics$completion_time_min))
+demographics$svs_angle_slider_t1 = as.numeric(sub(",", ".", demographics$svs_angle_slider_t1))
+demographics$svs_angle_t1 = as.numeric(sub(",", ".", demographics$svs_angle_t1))
+demographics$mean_angle = as.numeric(sub(",", ".", demographics$mean_angle))
+
+summary(demographics$completion_time_min)
+summary(demographics$completion_time_min[demographics$include == 1])
+summary(demographics$completion_time_min[demographics$completion_time_min < 80 & demographics$include ==  1])
+hist(demographics$completion_time_min[demographics$include == 1])
+
+table(demographics$sender)
+
+table(demographics$include)
+```
+
+```{r}
+demo_inkl = subset(demographics, demographics$include == 1)
+```
+
+
+```{r}
+data_search = data%>%dplyr::select(uniqueID,sender,trial_nr,response,optionSide,choice,choice_self,choice_other,starts_with("hidden_"),starts_with("searched_cue"),num_searched_cues,search_costs,self_a,other_a,self_b,other_b,start_self_a,start_self_b,start_other_a,start_other_b,item,start_self_left,start_other_left,start_self_right,start_other_right,outcome_self,outcome_other)
+data_search = subset(data_search, data_search$sender == "Decision")
+# Trial numbers were coded in the study software to run from 2 to 25 (24 trials total); shift to a 1-24 index.
+data_search$trial_nr = data_search$trial_nr - 1
+```
+
+```{r}
+# Selfish searches
+summary(data_search$num_searched_cues)
+table(data_search$num_searched_cues)
+hist(data_search$num_searched_cues)
+table(data_search$searched_cue_1)
+data_search$search_1_opt = ifelse(
+  grepl("left", data_search$searched_cue_1) & data_search$optionSide == "A_left", "a", ifelse(
+  grepl("left", data_search$searched_cue_1) & data_search$optionSide == "B_left", "b", ifelse(
+  grepl("right", data_search$searched_cue_1) & data_search$optionSide == "A_left", "b", ifelse(
+  grepl("right", data_search$searched_cue_1) & data_search$optionSide == "B_left", "a", NA)))) 
+
+data_search$search_1_side = ifelse(
+  grepl("left", data_search$searched_cue_1), "left", ifelse(
+  grepl("right", data_search$searched_cue_1), "right", NA))
+
+data_search$search_2_side = ifelse(
+  grepl("left", data_search$searched_cue_2), "left", ifelse(
+  grepl("right", data_search$searched_cue_2), "right", NA))
+
+data_search$switched_opt = ifelse(
+  data_search$search_1_side == "left" & data_search$search_2_side == "right", 1, ifelse(
+  data_search$search_1_side == "right" & data_search$search_2_side == "left", 1, ifelse(
+  data_search$search_1_side == data_search$search_2_side, 0, NA
+  )))
+
+#data_search$search_1_cue_nr = ifelse(
+#  grepl("1", data_search$searched_cue_1), "1", ifelse(
+#  grepl("2", data_search$searched_cue_1), "2", NA))
+
+table(data_search$search_1_opt)
+data_search$search_1_tg = ifelse(
+  grepl("other", data_search$searched_cue_1), "other", ifelse(
+  grepl("self", data_search$searched_cue_1), "self", NA))
+table(data_search$search_1_tg)
+table(data_search$search_1_opt,data_search$search_1_tg)
+
+data_search$search_2_tg = ifelse(
+  grepl("other", data_search$searched_cue_2), "other", ifelse(
+  grepl("self", data_search$searched_cue_2), "self", NA))
+table(data_search$search_2_tg)
+prop.table(table(data_search$search_2_tg))
+
+data_search$selfish_1 = ifelse(data_search$search_1_opt == "a", 1, 0)
+data_search$selfish_own_1 = ifelse(data_search$search_1_opt == "a" & grepl("self", data_search$searched_cue_1), 1, 0)
+
+#second search
+data_search = data_search%>%mutate(across(starts_with(c("hidden_", "start_")), parse_number))
+
+data_search$visible_self_left_1 = ifelse(
+  grepl("other", data_search$searched_cue_1), data_search$start_self_left, ifelse(
+  grepl("right", data_search$searched_cue_1), data_search$start_self_left, ifelse(
+  data_search$searched_cue_1 == "self_left_1", data_search$start_self_left + data_search$hidden_self_left_1, ifelse(
+  data_search$searched_cue_1 == "self_left_2", data_search$start_self_left + data_search$hidden_self_left_2, NA))))
+
+data_search$visible_other_left_1 = ifelse(
+  grepl("self", data_search$searched_cue_1), data_search$start_other_left, ifelse(
+  grepl("right", data_search$searched_cue_1), data_search$start_other_left, ifelse(
+  data_search$searched_cue_1 == "other_left_1", data_search$start_other_left + data_search$hidden_other_left_1, ifelse(
+  data_search$searched_cue_1 == "other_left_2", data_search$start_other_left + data_search$hidden_other_left_2, NA
+  ))))
+
+data_search$visible_self_right_1 = ifelse(
+  grepl("other", data_search$searched_cue_1), data_search$start_self_right, ifelse(
+  grepl("left", data_search$searched_cue_1), data_search$start_self_right, ifelse(
+  data_search$searched_cue_1 == "self_right_1", data_search$start_self_right + data_search$hidden_self_right_1, ifelse(
+  data_search$searched_cue_1 == "self_right_2", data_search$start_self_right + data_search$hidden_self_right_2, NA))))
+
+data_search$visible_other_right_1 = ifelse(
+  grepl("self", data_search$searched_cue_1), data_search$start_other_right, ifelse(
+  grepl("left", data_search$searched_cue_1), data_search$start_other_right, ifelse(
+  data_search$searched_cue_1 == "other_right_1", data_search$start_other_right + data_search$hidden_other_right_1, ifelse(
+  data_search$searched_cue_1 == "other_right_2", data_search$start_other_right + data_search$hidden_other_right_2, NA
+  ))))
+
+data_search$type_left_2 = ifelse(
+  data_search$visible_self_left_1 > data_search$visible_self_right_1 & data_search$visible_other_left_1 < data_search$visible_other_right_1, "selfish", ifelse(
+  data_search$visible_self_left_1 < data_search$visible_self_right_1 & data_search$visible_other_left_1 > data_search$visible_other_right_1, "prosocial", ifelse(
+  data_search$visible_self_left_1 < data_search$visible_self_right_1 & data_search$visible_other_left_1 < data_search$visible_other_right_1, "inferior", ifelse(
+  data_search$visible_self_left_1 > data_search$visible_self_right_1 & data_search$visible_other_left_1 > data_search$visible_other_right_1, "dominant", NA
+  ))))
+
+table(data_search$type_left_2)
+which(is.na(data_search$type_left_2))
+
+data_search$type_right_2 = ifelse(
+  data_search$type_left_2 == "selfish", "prosocial", ifelse(
+  data_search$type_left_2 == "prosocial", "selfish", ifelse(
+  data_search$type_left_2 == "inferior", "dominant", ifelse(
+  data_search$type_left_2 == "dominant", "inferior", NA
+  ))))
+table(data_search$type_right_2)
+
+data_search$selfish_2 = ifelse(
+  grepl("left", data_search$searched_cue_2) & data_search$type_left_2 == "selfish", 1, ifelse(
+  grepl("right", data_search$searched_cue_2) & data_search$type_right_2 == "selfish", 1, ifelse(
+  is.na(data_search$searched_cue_2), "stopped search", 0)))# Coded as the string "stopped search" (rather than NA) when the participant ended search before this cue was ever revealed.
+
+data_search$selfish_own_2 = ifelse(data_search$selfish_2 == 1 & grepl("self", data_search$searched_cue_2), 1, ifelse(data_search$selfish_2 == "stopped search", "stopped_search", 0))
+
+table(data_search$selfish_2)# This measure alone cannot support a claim about a deliberate "selfish" search strategy at this step: it is confounded with rationality. If a participant already searched one option, it is rational to search the other option next; and if two self-cues from Option A were already revealed, Option A is mechanically more likely to show the higher visible self-outcome simply because two revealed amounts tend to sum higher than one.
+
+table2(data_search$selfish_2,data_search$type_left_2)
+
+data_search$type_search_2 = ifelse(
+  data_search$selfish_2 == "stopped search", "stopped search", ifelse(
+  grepl("left", data_search$searched_cue_2), data_search$type_left_2, ifelse(
+  grepl("right", data_search$searched_cue_2), data_search$type_right_2, NA
+  )))
+table(data_search$type_search_2)
+
+data_search$higher_self_2 = ifelse(data_search$type_search_2 == "selfish" | data_search$type_search_2 == "dominant", 1, ifelse(data_search$type_search_2 == "stopped search", "stopped search", 0))
+
+data_search$higher_self_own_2 = ifelse(data_search$higher_self_2 == "stopped search", "stopped search", ifelse(data_search$higher_self_2 == 1 & grepl("self", data_search$searched_cue_2), 1, 0))
+
+data_search$type_choice_after1 = ifelse(
+  data_search$type_search_2 == "stopped search" & data_search$response == "choose_left", data_search$type_left_2, ifelse(
+  data_search$type_search_2 == "stopped search" & data_search$response == "choose_right", data_search$type_right_2, "undecided yet"
+  ))
+
+table(data_search$type_choice_after1)
+
+table(data_search$uniqueID[data_search$type_choice_after1 == "inferior"])#based on free text answers either an error or the belief that this option is more profitable?
+
+table2(data_search$type_search_2, data_search$switched_opt)
+table(data_search$switched_opt)
+```
+
+```{r}
+#3. search
+data_search$search_3_side = ifelse(
+  grepl("left", data_search$searched_cue_3), "left", ifelse(
+  grepl("right", data_search$searched_cue_3), "right", NA))
+
+table(data_search$search_3_side)
+
+data_search$search_3_tg = ifelse(
+  grepl("other", data_search$searched_cue_3), "other", ifelse(
+  grepl("self", data_search$searched_cue_3), "self", NA))
+table(data_search$search_3_tg)
+
+prop.table(table(data_search$search_3_tg))
+
+data_search$visible_self_left_2 = ifelse(
+  is.na(data_search$searched_cue_2), data_search$visible_self_left_1, ifelse(
+  grepl("other", data_search$searched_cue_2), data_search$visible_self_left_1, ifelse(
+  grepl("right", data_search$searched_cue_2), data_search$visible_self_left_1, ifelse(
+  data_search$searched_cue_2 == "self_left_1", data_search$visible_self_left_1 + data_search$hidden_self_left_1, ifelse(
+  data_search$searched_cue_2 == "self_left_2", data_search$visible_self_left_1 + data_search$hidden_self_left_2, NA)))))
+
+data_search$visible_other_left_2 = ifelse(
+  is.na(data_search$searched_cue_2), data_search$visible_other_left_1, ifelse(
+  grepl("self", data_search$searched_cue_2), data_search$visible_other_left_1, ifelse(
+  grepl("right", data_search$searched_cue_2), data_search$visible_other_left_1, ifelse(
+  data_search$searched_cue_2 == "other_left_1", data_search$visible_other_left_1 + data_search$hidden_other_left_1, ifelse(
+  data_search$searched_cue_2 == "other_left_2", data_search$visible_other_left_1 + data_search$hidden_other_left_2, NA
+  )))))
+
+data_search$visible_self_right_2 = ifelse(
+  is.na(data_search$searched_cue_2), data_search$visible_self_right_1, ifelse(
+  grepl("other", data_search$searched_cue_2), data_search$visible_self_right_1, ifelse(
+  grepl("left", data_search$searched_cue_2), data_search$visible_self_right_1, ifelse(
+  data_search$searched_cue_2 == "self_right_1", data_search$visible_self_right_1 + data_search$hidden_self_right_1, ifelse(
+  data_search$searched_cue_2 == "self_right_2", data_search$visible_self_right_1 + data_search$hidden_self_right_2, NA)))))
+
+data_search$visible_other_right_2 = ifelse(
+  is.na(data_search$searched_cue_2), data_search$visible_other_right_1, ifelse(
+  grepl("self", data_search$searched_cue_2), data_search$visible_other_right_1, ifelse(
+  grepl("left", data_search$searched_cue_2), data_search$visible_other_right_1, ifelse(
+  data_search$searched_cue_2 == "other_right_1", data_search$visible_other_right_1 + data_search$hidden_other_right_1, ifelse(
+  data_search$searched_cue_2 == "other_right_2", data_search$visible_other_right_1 + data_search$hidden_other_right_2, NA
+  )))))
+
+data_search$type_left_3 = ifelse(
+  data_search$visible_self_left_2 > data_search$visible_self_right_2 & data_search$visible_other_left_2 < data_search$visible_other_right_2, "selfish", ifelse(
+  data_search$visible_self_left_2 < data_search$visible_self_right_2 & data_search$visible_other_left_2 > data_search$visible_other_right_2, "prosocial", ifelse(
+  data_search$visible_self_left_2 < data_search$visible_self_right_2 & data_search$visible_other_left_2 < data_search$visible_other_right_2, "inferior", ifelse(
+  data_search$visible_self_left_2 > data_search$visible_self_right_2 & data_search$visible_other_left_2 > data_search$visible_other_right_2, "dominant", NA
+  ))))
+
+table(data_search$type_left_3)
+which(is.na(data_search$type_left_3))
+
+data_search$type_right_3 = ifelse(
+  data_search$type_left_3 == "selfish", "prosocial", ifelse(
+  data_search$type_left_3 == "prosocial", "selfish", ifelse(
+  data_search$type_left_3 == "inferior", "dominant", ifelse(
+  data_search$type_left_3 == "dominant", "inferior", NA
+  ))))
+table(data_search$type_right_3)
+
+data_search$selfish_3 = ifelse(
+  grepl("left", data_search$searched_cue_3) & data_search$type_left_3 == "selfish", 1, ifelse(
+  grepl("right", data_search$searched_cue_3) & data_search$type_right_3 == "selfish", 1, ifelse(
+  is.na(data_search$searched_cue_3), "stopped search", 0)))# Coded as the string "stopped search" (rather than NA) when the participant ended search before this cue was ever revealed.
+
+table(data_search$selfish_3)# This measure alone cannot support a claim about a deliberate "selfish" search strategy at this step: it is confounded with rationality. If a participant already searched one option, it is rational to search the other option next; and if two self-cues from Option A were already revealed, Option A is mechanically more likely to show the higher visible self-outcome simply because two revealed amounts tend to sum higher than one.
+
+table2(data_search$selfish_3,data_search$type_left_3)
+
+data_search$type_search_3 = ifelse(
+  data_search$selfish_3 == "stopped search", "stopped search", ifelse(
+  grepl("left", data_search$searched_cue_3), data_search$type_left_3, ifelse(
+  grepl("right", data_search$searched_cue_3), data_search$type_right_3, NA
+  )))
+table(data_search$type_search_3)
+
+data_search$type_choice_after2 = ifelse(
+  data_search$type_search_3 == "stopped search" & data_search$response == "choose_left", data_search$type_left_3, ifelse(
+  data_search$type_search_3 == "stopped search" & data_search$response == "choose_right", data_search$type_right_3, "undecided yet"
+  ))
+
+table(data_search$type_choice_after2)
+```
+
+```{r}
+# 4. search
+data_search$search_4_side = ifelse(
+  grepl("left", data_search$searched_cue_4), "left", ifelse(
+  grepl("right", data_search$searched_cue_4), "right", NA))
+
+table(data_search$search_4_side)
+
+data_search$search_4_tg = ifelse(
+  grepl("other", data_search$searched_cue_4), "other", ifelse(
+  grepl("self", data_search$searched_cue_4), "self", NA))
+table(data_search$search_4_tg)
+
+prop.table(table(data_search$search_4_tg))
+
+data_search$visible_self_left_3 = ifelse(
+  is.na(data_search$searched_cue_3), data_search$visible_self_left_2, ifelse(
+  grepl("other", data_search$searched_cue_3), data_search$visible_self_left_2, ifelse(
+  grepl("right", data_search$searched_cue_3), data_search$visible_self_left_2, ifelse(
+  data_search$searched_cue_3 == "self_left_1", data_search$visible_self_left_2 + data_search$hidden_self_left_1, ifelse(
+  data_search$searched_cue_3 == "self_left_2", data_search$visible_self_left_2 + data_search$hidden_self_left_2, NA)))))
+
+data_search$visible_other_left_3 = ifelse(
+  is.na(data_search$searched_cue_3), data_search$visible_other_left_2, ifelse(
+  grepl("self", data_search$searched_cue_3), data_search$visible_other_left_2, ifelse(
+  grepl("right", data_search$searched_cue_3), data_search$visible_other_left_2, ifelse(
+  data_search$searched_cue_3 == "other_left_1", data_search$visible_other_left_2 + data_search$hidden_other_left_1, ifelse(
+  data_search$searched_cue_3 == "other_left_2", data_search$visible_other_left_2 + data_search$hidden_other_left_2, NA
+  )))))
+
+data_search$visible_self_right_3 = ifelse(
+  is.na(data_search$searched_cue_3), data_search$visible_self_right_2, ifelse(
+  grepl("other", data_search$searched_cue_3), data_search$visible_self_right_2, ifelse(
+  grepl("left", data_search$searched_cue_3), data_search$visible_self_right_2, ifelse(
+  data_search$searched_cue_3 == "self_right_1", data_search$visible_self_right_2 + data_search$hidden_self_right_1, ifelse(
+  data_search$searched_cue_3 == "self_right_2", data_search$visible_self_right_2 + data_search$hidden_self_right_2, NA)))))
+
+data_search$visible_other_right_3 = ifelse(
+  is.na(data_search$searched_cue_3), data_search$visible_other_right_2, ifelse(
+  grepl("self", data_search$searched_cue_3), data_search$visible_other_right_2, ifelse(
+  grepl("left", data_search$searched_cue_3), data_search$visible_other_right_2, ifelse(
+  data_search$searched_cue_3 == "other_right_1", data_search$visible_other_right_2 + data_search$hidden_other_right_1, ifelse(
+  data_search$searched_cue_3 == "other_right_2", data_search$visible_other_right_2 + data_search$hidden_other_right_2, NA
+  )))))
+
+data_search$type_left_4 = ifelse(
+  data_search$visible_self_left_3 >= data_search$visible_self_right_3 & data_search$visible_other_left_3 < data_search$visible_other_right_3, "selfish", ifelse(
+  data_search$visible_self_left_3 <= data_search$visible_self_right_3 & data_search$visible_other_left_3 > data_search$visible_other_right_3, "prosocial", ifelse(
+  data_search$visible_self_left_3 <= data_search$visible_self_right_3 & data_search$visible_other_left_3 < data_search$visible_other_right_3, "inferior", ifelse(
+  data_search$visible_self_left_3 >= data_search$visible_self_right_3 & data_search$visible_other_left_3 > data_search$visible_other_right_3, "dominant", NA
+  ))))
+
+table(data_search$type_left_4)
+which(is.na(data_search$type_left_4))
+
+data_search$type_right_4 = ifelse(
+  data_search$type_left_4 == "selfish", "prosocial", ifelse(
+  data_search$type_left_4 == "prosocial", "selfish", ifelse(
+  data_search$type_left_4 == "inferior", "dominant", ifelse(
+  data_search$type_left_4 == "dominant", "inferior", NA
+  ))))
+table(data_search$type_right_4)
+
+data_search$selfish_4 = ifelse(
+  grepl("left", data_search$searched_cue_4) & data_search$type_left_4 == "selfish", 1, ifelse(
+  grepl("right", data_search$searched_cue_4) & data_search$type_right_4 == "selfish", 1, ifelse(
+  is.na(data_search$searched_cue_4), "stopped search", 0)))# Coded as the string "stopped search" (rather than NA) when the participant ended search before this cue was ever revealed.
+
+table(data_search$selfish_4)# This measure alone cannot support a claim about a deliberate "selfish" search strategy at this step: it is confounded with rationality. If a participant already searched one option, it is rational to search the other option next; and if two self-cues from Option A were already revealed, Option A is mechanically more likely to show the higher visible self-outcome simply because two revealed amounts tend to sum higher than one.
+
+table2(data_search$selfish_4,data_search$type_left_4)
+
+data_search$type_search_4 = ifelse(
+  data_search$selfish_4 == "stopped search", "stopped search", ifelse(
+  grepl("left", data_search$searched_cue_4), data_search$type_left_4, ifelse(
+  grepl("right", data_search$searched_cue_4), data_search$type_right_4, NA
+  )))
+table(data_search$type_search_4)
+
+data_search$type_choice_after3 = ifelse(
+  data_search$type_search_4 == "stopped search" & data_search$response == "choose_left", data_search$type_left_4, ifelse(
+  data_search$type_search_4 == "stopped search" & data_search$response == "choose_right", data_search$type_right_4, "undecided yet"
+  ))
+
+table(data_search$type_choice_after3)
+```
+
+```{r}
+#search 5:
+data_search$search_5_side = ifelse(
+  grepl("left", data_search$searched_cue_5), "left", ifelse(
+  grepl("right", data_search$searched_cue_5), "right", NA))
+
+table(data_search$search_5_side)
+
+data_search$search_5_tg = ifelse(
+  grepl("other", data_search$searched_cue_5), "other", ifelse(
+  grepl("self", data_search$searched_cue_5), "self", NA))
+table(data_search$search_5_tg)
+
+prop.table(table(data_search$search_5_tg))
+
+data_search$visible_self_left_4 = ifelse(
+  is.na(data_search$searched_cue_4), data_search$visible_self_left_3, ifelse(
+  grepl("other", data_search$searched_cue_4), data_search$visible_self_left_3, ifelse(
+  grepl("right", data_search$searched_cue_4), data_search$visible_self_left_3, ifelse(
+  data_search$searched_cue_4 == "self_left_1", data_search$visible_self_left_3 + data_search$hidden_self_left_1, ifelse(
+  data_search$searched_cue_4 == "self_left_2", data_search$visible_self_left_3 + data_search$hidden_self_left_2, NA)))))
+
+data_search$visible_other_left_4 = ifelse(
+  is.na(data_search$searched_cue_4), data_search$visible_other_left_3, ifelse(
+  grepl("self", data_search$searched_cue_4), data_search$visible_other_left_3, ifelse(
+  grepl("right", data_search$searched_cue_4), data_search$visible_other_left_3, ifelse(
+  data_search$searched_cue_4 == "other_left_1", data_search$visible_other_left_3 + data_search$hidden_other_left_1, ifelse(
+  data_search$searched_cue_4 == "other_left_2", data_search$visible_other_left_3 + data_search$hidden_other_left_2, NA
+  )))))
+
+data_search$visible_self_right_4 = ifelse(
+  is.na(data_search$searched_cue_4), data_search$visible_self_right_3, ifelse(
+  grepl("other", data_search$searched_cue_4), data_search$visible_self_right_3, ifelse(
+  grepl("left", data_search$searched_cue_4), data_search$visible_self_right_3, ifelse(
+  data_search$searched_cue_4 == "self_right_1", data_search$visible_self_right_3 + data_search$hidden_self_right_1, ifelse(
+  data_search$searched_cue_4 == "self_right_2", data_search$visible_self_right_3 + data_search$hidden_self_right_2, NA)))))
+
+data_search$visible_other_right_4 = ifelse(
+  is.na(data_search$searched_cue_4), data_search$visible_other_right_3, ifelse(
+  grepl("self", data_search$searched_cue_4), data_search$visible_other_right_3, ifelse(
+  grepl("left", data_search$searched_cue_4), data_search$visible_other_right_3, ifelse(
+  data_search$searched_cue_4 == "other_right_1", data_search$visible_other_right_3 + data_search$hidden_other_right_1, ifelse(
+  data_search$searched_cue_4 == "other_right_2", data_search$visible_other_right_3 + data_search$hidden_other_right_2, NA
+  )))))
+
+data_search$type_left_5 = ifelse(
+  data_search$visible_self_left_4 >= data_search$visible_self_right_4 & data_search$visible_other_left_4 < data_search$visible_other_right_4, "selfish", ifelse(
+  data_search$visible_self_left_4 <= data_search$visible_self_right_4 & data_search$visible_other_left_4 > data_search$visible_other_right_4, "prosocial", ifelse(
+  data_search$visible_self_left_4 <= data_search$visible_self_right_4 & data_search$visible_other_left_4 < data_search$visible_other_right_4, "inferior", ifelse(
+  data_search$visible_self_left_4 >= data_search$visible_self_right_4 & data_search$visible_other_left_4 > data_search$visible_other_right_4, "dominant", NA
+  ))))
+
+table(data_search$type_left_5)
+which(is.na(data_search$type_left_5))
+
+data_search$type_right_5 = ifelse(
+  data_search$type_left_5 == "selfish", "prosocial", ifelse(
+  data_search$type_left_5 == "prosocial", "selfish", ifelse(
+  data_search$type_left_5 == "inferior", "dominant", ifelse(
+  data_search$type_left_5 == "dominant", "inferior", NA
+  ))))
+table(data_search$type_right_5)
+
+data_search$selfish_5 = ifelse(
+  grepl("left", data_search$searched_cue_5) & data_search$type_left_5 == "selfish", 1, ifelse(
+  grepl("right", data_search$searched_cue_5) & data_search$type_right_5 == "selfish", 1, ifelse(
+  is.na(data_search$searched_cue_5), "stopped search", 0)))
+
+table(data_search$selfish_5)
+
+data_search$type_search_5 = ifelse(
+  data_search$selfish_5 == "stopped search", "stopped search", ifelse(
+  grepl("left", data_search$searched_cue_5), data_search$type_left_5, ifelse(
+  grepl("right", data_search$searched_cue_5), data_search$type_right_5, NA
+  )))
+table(data_search$type_search_5)
+
+data_search$type_choice_after4 = ifelse(
+  data_search$type_search_5 == "stopped search" & data_search$response == "choose_left", data_search$type_left_5, ifelse(
+  data_search$type_search_5 == "stopped search" & data_search$response == "choose_right", data_search$type_right_5, "undecided yet"
+  ))
+
+table(data_search$type_choice_after4)
+```
+
+```{r}
+#search 6
+data_search$search_6_side = ifelse(
+  grepl("left", data_search$searched_cue_6), "left", ifelse(
+  grepl("right", data_search$searched_cue_6), "right", NA))
+
+table(data_search$search_6_side)
+
+data_search$search_6_tg = ifelse(
+  grepl("other", data_search$searched_cue_6), "other", ifelse(
+  grepl("self", data_search$searched_cue_6), "self", NA))
+table(data_search$search_6_tg)
+
+prop.table(table(data_search$search_6_tg))
+
+data_search$visible_self_left_5 = ifelse(
+  is.na(data_search$searched_cue_5), data_search$visible_self_left_4, ifelse(
+  grepl("other", data_search$searched_cue_5), data_search$visible_self_left_4, ifelse(
+  grepl("right", data_search$searched_cue_5), data_search$visible_self_left_4, ifelse(
+  data_search$searched_cue_5 == "self_left_1", data_search$visible_self_left_4 + data_search$hidden_self_left_1, ifelse(
+  data_search$searched_cue_5 == "self_left_2", data_search$visible_self_left_4 + data_search$hidden_self_left_2, NA)))))
+
+data_search$visible_other_left_5 = ifelse(
+  is.na(data_search$searched_cue_5), data_search$visible_other_left_4, ifelse(
+  grepl("self", data_search$searched_cue_5), data_search$visible_other_left_4, ifelse(
+  grepl("right", data_search$searched_cue_5), data_search$visible_other_left_4, ifelse(
+  data_search$searched_cue_5 == "other_left_1", data_search$visible_other_left_4 + data_search$hidden_other_left_1, ifelse(
+  data_search$searched_cue_5 == "other_left_2", data_search$visible_other_left_4 + data_search$hidden_other_left_2, NA
+  )))))
+
+data_search$visible_self_right_5 = ifelse(
+  is.na(data_search$searched_cue_5), data_search$visible_self_right_4, ifelse(
+  grepl("other", data_search$searched_cue_5), data_search$visible_self_right_4, ifelse(
+  grepl("left", data_search$searched_cue_5), data_search$visible_self_right_4, ifelse(
+  data_search$searched_cue_5 == "self_right_1", data_search$visible_self_right_4 + data_search$hidden_self_right_1, ifelse(
+  data_search$searched_cue_5 == "self_right_2", data_search$visible_self_right_4 + data_search$hidden_self_right_2, NA)))))
+
+data_search$visible_other_right_5 = ifelse(
+  is.na(data_search$searched_cue_5), data_search$visible_other_right_4, ifelse(
+  grepl("self", data_search$searched_cue_5), data_search$visible_other_right_4, ifelse(
+  grepl("left", data_search$searched_cue_5), data_search$visible_other_right_4, ifelse(
+  data_search$searched_cue_5 == "other_right_1", data_search$visible_other_right_4 + data_search$hidden_other_right_1, ifelse(
+  data_search$searched_cue_5 == "other_right_2", data_search$visible_other_right_4 + data_search$hidden_other_right_2, NA
+  )))))
+
+data_search$type_left_6 = ifelse(
+  data_search$visible_self_left_5 >= data_search$visible_self_right_5 & data_search$visible_other_left_5 < data_search$visible_other_right_5, "selfish", ifelse(
+  data_search$visible_self_left_5 <= data_search$visible_self_right_5 & data_search$visible_other_left_5 > data_search$visible_other_right_5, "prosocial", ifelse(
+  data_search$visible_self_left_5 <= data_search$visible_self_right_5 & data_search$visible_other_left_5 < data_search$visible_other_right_5, "inferior", ifelse(
+  data_search$visible_self_left_5 >= data_search$visible_self_right_5 & data_search$visible_other_left_5 > data_search$visible_other_right_5, "dominant", NA
+  ))))
+
+table(data_search$type_left_6)
+which(is.na(data_search$type_left_6))
+
+data_search$type_right_6 = ifelse(
+  data_search$type_left_6 == "selfish", "prosocial", ifelse(
+  data_search$type_left_6 == "prosocial", "selfish", ifelse(
+  data_search$type_left_6 == "inferior", "dominant", ifelse(
+  data_search$type_left_6 == "dominant", "inferior", NA
+  ))))
+table(data_search$type_right_6)
+
+data_search$selfish_6 = ifelse(
+  grepl("left", data_search$searched_cue_6) & data_search$type_left_6 == "selfish", 1, ifelse(
+  grepl("right", data_search$searched_cue_6) & data_search$type_right_6 == "selfish", 1, ifelse(
+  is.na(data_search$searched_cue_6), "stopped search", 0)))
+
+table(data_search$selfish_6)
+
+data_search$type_search_6 = ifelse(
+  data_search$selfish_6 == "stopped search", "stopped search", ifelse(
+  grepl("left", data_search$searched_cue_6), data_search$type_left_6, ifelse(
+  grepl("right", data_search$searched_cue_6), data_search$type_right_6, NA
+  )))
+table(data_search$type_search_6)
+
+data_search$type_choice_after5 = ifelse(
+  data_search$type_search_6 == "stopped search" & data_search$response == "choose_left", data_search$type_left_6, ifelse(
+  data_search$type_search_6 == "stopped search" & data_search$response == "choose_right", data_search$type_right_6, "undecided yet"
+  ))
+
+table(data_search$type_choice_after5)
+```
+
+```{r}
+#search 7
+data_search$search_7_side = ifelse(
+  grepl("left", data_search$searched_cue_7), "left", ifelse(
+  grepl("right", data_search$searched_cue_7), "right", NA))
+
+table(data_search$search_7_side)
+
+data_search$search_7_tg = ifelse(
+  grepl("other", data_search$searched_cue_7), "other", ifelse(
+  grepl("self", data_search$searched_cue_7), "self", NA))
+table(data_search$search_7_tg)
+
+prop.table(table(data_search$search_7_tg))
+
+data_search$visible_self_left_6 = ifelse(
+  is.na(data_search$searched_cue_6), data_search$visible_self_left_5, ifelse(
+  grepl("other", data_search$searched_cue_6), data_search$visible_self_left_5, ifelse(
+  grepl("right", data_search$searched_cue_6), data_search$visible_self_left_5, ifelse(
+  data_search$searched_cue_6 == "self_left_1", data_search$visible_self_left_5 + data_search$hidden_self_left_1, ifelse(
+  data_search$searched_cue_6 == "self_left_2", data_search$visible_self_left_5 + data_search$hidden_self_left_2, NA)))))
+
+data_search$visible_other_left_6 = ifelse(
+  is.na(data_search$searched_cue_6), data_search$visible_other_left_5, ifelse(
+  grepl("self", data_search$searched_cue_6), data_search$visible_other_left_5, ifelse(
+  grepl("right", data_search$searched_cue_6), data_search$visible_other_left_5, ifelse(
+  data_search$searched_cue_6 == "other_left_1", data_search$visible_other_left_5 + data_search$hidden_other_left_1, ifelse(
+  data_search$searched_cue_6 == "other_left_2", data_search$visible_other_left_5 + data_search$hidden_other_left_2, NA
+  )))))
+
+data_search$visible_self_right_6 = ifelse(
+  is.na(data_search$searched_cue_6), data_search$visible_self_right_5, ifelse(
+  grepl("other", data_search$searched_cue_6), data_search$visible_self_right_5, ifelse(
+  grepl("left", data_search$searched_cue_6), data_search$visible_self_right_5, ifelse(
+  data_search$searched_cue_6 == "self_right_1", data_search$visible_self_right_5 + data_search$hidden_self_right_1, ifelse(
+  data_search$searched_cue_6 == "self_right_2", data_search$visible_self_right_5 + data_search$hidden_self_right_2, NA)))))
+
+data_search$visible_other_right_6 = ifelse(
+  is.na(data_search$searched_cue_6), data_search$visible_other_right_5, ifelse(
+  grepl("self", data_search$searched_cue_6), data_search$visible_other_right_5, ifelse(
+  grepl("left", data_search$searched_cue_6), data_search$visible_other_right_5, ifelse(
+  data_search$searched_cue_6 == "other_right_1", data_search$visible_other_right_5 + data_search$hidden_other_right_1, ifelse(
+  data_search$searched_cue_6 == "other_right_2", data_search$visible_other_right_5 + data_search$hidden_other_right_2, NA
+  )))))
+
+data_search$type_left_7 = ifelse(
+  data_search$visible_self_left_6 >= data_search$visible_self_right_6 & data_search$visible_other_left_6 < data_search$visible_other_right_6, "selfish", ifelse(
+  data_search$visible_self_left_6 <= data_search$visible_self_right_6 & data_search$visible_other_left_6 > data_search$visible_other_right_6, "prosocial", ifelse(
+  data_search$visible_self_left_6 <= data_search$visible_self_right_6 & data_search$visible_other_left_6 < data_search$visible_other_right_6, "inferior", ifelse(
+  data_search$visible_self_left_6 >= data_search$visible_self_right_6 & data_search$visible_other_left_6 > data_search$visible_other_right_6, "dominant", NA
+  ))))
+
+table(data_search$type_left_7)
+which(is.na(data_search$type_left_7))
+
+data_search$type_right_7 = ifelse(
+  data_search$type_left_7 == "selfish", "prosocial", ifelse(
+  data_search$type_left_7 == "prosocial", "selfish", ifelse(
+  data_search$type_left_7 == "inferior", "dominant", ifelse(
+  data_search$type_left_7 == "dominant", "inferior", NA
+  ))))
+table(data_search$type_right_7)
+
+data_search$selfish_7 = ifelse(
+  grepl("left", data_search$searched_cue_7) & data_search$type_left_7 == "selfish", 1, ifelse(
+  grepl("right", data_search$searched_cue_7) & data_search$type_right_7 == "selfish", 1, ifelse(
+  is.na(data_search$searched_cue_7), "stopped search", 0)))
+
+table(data_search$selfish_7)
+
+data_search$type_search_7 = ifelse(
+  data_search$selfish_7 == "stopped search", "stopped search", ifelse(
+  grepl("left", data_search$searched_cue_7), data_search$type_left_7, ifelse(
+  grepl("right", data_search$searched_cue_7), data_search$type_right_7, NA
+  )))
+table(data_search$type_search_7)
+
+data_search$type_choice_after6 = ifelse(
+  data_search$type_search_7 == "stopped search" & data_search$response == "choose_left", data_search$type_left_7, ifelse(
+  data_search$type_search_7 == "stopped search" & data_search$response == "choose_right", data_search$type_right_7, "undecided yet"
+  ))
+
+table(data_search$type_choice_after6)
+```
+
+```{r}
+#search 8
+data_search$search_8_side = ifelse(
+  grepl("left", data_search$searched_cue_8), "left", ifelse(
+  grepl("right", data_search$searched_cue_8), "right", NA))
+
+table(data_search$search_8_side)
+
+data_search$search_8_tg = ifelse(
+  grepl("other", data_search$searched_cue_8), "other", ifelse(
+  grepl("self", data_search$searched_cue_8), "self", NA))
+table(data_search$search_8_tg)
+
+prop.table(table(data_search$search_8_tg))
+
+data_search$visible_self_left_7 = ifelse(
+  is.na(data_search$searched_cue_7), data_search$visible_self_left_6, ifelse(
+  grepl("other", data_search$searched_cue_7), data_search$visible_self_left_6, ifelse(
+  grepl("right", data_search$searched_cue_7), data_search$visible_self_left_6, ifelse(
+  data_search$searched_cue_7 == "self_left_1", data_search$visible_self_left_6 + data_search$hidden_self_left_1, ifelse(
+  data_search$searched_cue_7 == "self_left_2", data_search$visible_self_left_6 + data_search$hidden_self_left_2, NA)))))
+
+data_search$visible_other_left_7 = ifelse(
+  is.na(data_search$searched_cue_7), data_search$visible_other_left_6, ifelse(
+  grepl("self", data_search$searched_cue_7), data_search$visible_other_left_6, ifelse(
+  grepl("right", data_search$searched_cue_7), data_search$visible_other_left_6, ifelse(
+  data_search$searched_cue_7 == "other_left_1", data_search$visible_other_left_6 + data_search$hidden_other_left_1, ifelse(
+  data_search$searched_cue_7 == "other_left_2", data_search$visible_other_left_6 + data_search$hidden_other_left_2, NA
+  )))))
+
+data_search$visible_self_right_7 = ifelse(
+  is.na(data_search$searched_cue_7), data_search$visible_self_right_6, ifelse(
+  grepl("other", data_search$searched_cue_7), data_search$visible_self_right_6, ifelse(
+  grepl("left", data_search$searched_cue_7), data_search$visible_self_right_6, ifelse(
+  data_search$searched_cue_7 == "self_right_1", data_search$visible_self_right_6 + data_search$hidden_self_right_1, ifelse(
+  data_search$searched_cue_7 == "self_right_2", data_search$visible_self_right_6 + data_search$hidden_self_right_2, NA)))))
+
+data_search$visible_other_right_7 = ifelse(
+  is.na(data_search$searched_cue_7), data_search$visible_other_right_6, ifelse(
+  grepl("self", data_search$searched_cue_7), data_search$visible_other_right_6, ifelse(
+  grepl("left", data_search$searched_cue_7), data_search$visible_other_right_6, ifelse(
+  data_search$searched_cue_7 == "other_right_1", data_search$visible_other_right_6 + data_search$hidden_other_right_1, ifelse(
+  data_search$searched_cue_7 == "other_right_2", data_search$visible_other_right_6 + data_search$hidden_other_right_2, NA
+  )))))
+
+data_search$type_left_8 = ifelse(
+  data_search$visible_self_left_7 >= data_search$visible_self_right_7 & data_search$visible_other_left_7 < data_search$visible_other_right_7, "selfish", ifelse(
+  data_search$visible_self_left_7 <= data_search$visible_self_right_7 & data_search$visible_other_left_7 > data_search$visible_other_right_7, "prosocial", ifelse(
+  data_search$visible_self_left_7 <= data_search$visible_self_right_7 & data_search$visible_other_left_7 < data_search$visible_other_right_7, "inferior", ifelse(
+  data_search$visible_self_left_7 >= data_search$visible_self_right_7 & data_search$visible_other_left_7 > data_search$visible_other_right_7, "dominant", NA
+  ))))
+
+table(data_search$type_left_8)
+which(is.na(data_search$type_left_8))
+
+data_search$type_right_8 = ifelse(
+  data_search$type_left_8 == "selfish", "prosocial", ifelse(
+  data_search$type_left_8 == "prosocial", "selfish", ifelse(
+  data_search$type_left_8 == "inferior", "dominant", ifelse(
+  data_search$type_left_8 == "dominant", "inferior", NA
+  ))))
+table(data_search$type_right_8)
+
+data_search$selfish_8 = ifelse(
+  grepl("left", data_search$searched_cue_8) & data_search$type_left_8 == "selfish", 1, ifelse(
+  grepl("right", data_search$searched_cue_8) & data_search$type_right_8 == "selfish", 1, ifelse(
+  is.na(data_search$searched_cue_8), "stopped search", 0)))
+
+table(data_search$selfish_8)
+
+data_search$type_search_8 = ifelse(
+  data_search$selfish_8 == "stopped search", "stopped search", ifelse(
+  grepl("left", data_search$searched_cue_8), data_search$type_left_8, ifelse(
+  grepl("right", data_search$searched_cue_8), data_search$type_right_8, NA
+  )))
+table(data_search$type_search_8)
+
+data_search$type_choice_after7 = ifelse(
+  data_search$type_search_8 == "stopped search" & data_search$response == "choose_left", data_search$type_left_8, ifelse(
+  data_search$type_search_8 == "stopped search" & data_search$response == "choose_right", data_search$type_right_8, "undecided yet"
+  ))
+
+table(data_search$type_choice_after7)
+
+data_search$self_a = parse_number(data_search$self_a)
+data_search$self_b = parse_number(data_search$self_b)
+data_search$other_a = parse_number(data_search$other_a)
+data_search$other_b = parse_number(data_search$other_b)
+
+data_search$a_overall = ifelse(
+  data_search$self_a > data_search$self_b & data_search$other_a < data_search$other_b, "selfish", ifelse(
+  data_search$self_a < data_search$self_b & data_search$other_a > data_search$other_b, "prosocial", ifelse(
+  data_search$self_a < data_search$self_b & data_search$other_a < data_search$other_b, "inferior", ifelse(
+  data_search$self_a > data_search$self_b & data_search$other_a > data_search$other_b, "dominant", NA
+  ))))
+
+table(data_search$a_overall)
+which(is.na(data_search$a_overall))
+
+data_search$b_overall = ifelse(
+  data_search$a_overall == "selfish", "prosocial", ifelse(
+  data_search$a_overall == "prosocial", "selfish", ifelse(
+  data_search$a_overall == "inferior", "dominant", ifelse(
+  data_search$a_overall == "dominant", "inferior", NA
+  ))))
+
+data_search$type_choice_final = ifelse(
+  data_search$type_choice_after7 != "undecided yet", data_search$type_choice_after7, ifelse(
+  data_search$choice == "a", data_search$a_overall, ifelse(
+  data_search$choice == "b", data_search$b_overall, NA
+  )))
+```
+
+
+```{r}
+attr_sear_sc = data_search%>%group_by(uniqueID)%>%summarise(
+  score_indiv_search = sum(search_1_opt == "a"),
+  score_indiv_own_1 = sum(selfish_own_1 == "1"),
+  proso_search = sum(search_1_opt == "b"),
+  search_self = sum(search_1_tg == "self"),
+  search_other = sum(search_1_tg == "other"),
+  percentage_indiv_search_2 = sum(type_search_2 == "selfish")/(24 - (sum(type_search_2 == "stopped search"))),
+  percentage_search_higher_2 = (sum(type_search_2 == "selfish") + sum(type_search_2 == "dominant"))/(24 - (sum(type_search_2 == "stopped search"))),
+  percentage_self_2 = sum(search_2_tg == "self", na.rm = T)/(24 - (sum(type_search_2 == "stopped search"))),
+  percentage_other_2 = sum(search_2_tg == "other", na.rm = T)/(24 - (sum(type_search_2 == "stopped search"))),
+  percentage_indiv_own_2 = sum(higher_self_own_2 == 1)/(24 - (sum(type_search_2 == "stopped search"))),
+  score_indiv_choice = sum(type_choice_final == "selfish"),
+  score_proso_choice = sum(type_choice_final == "prosocial"),
+  mean_searched_cues = mean(num_searched_cues),
+  stop_after_free = sum(type_search_2 == "stopped search")
+  )
+
+attr_sear_sc = attr_sear_sc%>%mutate(across(starts_with("percentage_"), ~ ifelse(is.nan(.), NA, .)))
+
+attr_sear_sc = left_join(attr_sear_sc, demo_inkl, by = "uniqueID")
+attr_sear_sc = subset(attr_sear_sc, attr_sear_sc$include == 1)
+attr_sear_sc$percentage_indiv_search = (attr_sear_sc$score_indiv_search/24)*100
+
+data_search_incl = subset(data_search, data_search$uniqueID%in%attr_sear_sc$uniqueID)
+
+## pct_chose_a: the raw proportion (0-1) of trials in which the participant's
+## FINAL choice was Option A (= Option 2 in the manuscript, the higher-own-
+## payoff option), computed directly from the recorded response - NOT from
+## the "selfish/prosocial/dominant/inferior" type_choice_final classification
+## (score_indiv_choice below). This is the ONLY choice measure used for any
+## reported correlation or the mediation analysis; score_indiv_choice is kept
+## only because it feeds the "dominant"/"inferior"/"prosocial" breakdowns
+## elsewhere, not because it is itself reported as a choice measure.
+pct_chose_a_tbl = data_search_incl %>%
+  group_by(uniqueID) %>%
+  summarise(pct_chose_a = mean(choice == "a", na.rm = TRUE))
+attr_sear_sc = left_join(attr_sear_sc, pct_chose_a_tbl, by = "uniqueID")
+```
+
+### Merge SVO scores from session 1
+
+Note: as of the re-anonymized data export, `demographics` (and thus `demo_inkl`) already has the session-1 SVO/demographic variables (e.g. `svs_angle_t1`, `svs_angle_slider_t1`, `SVOtyp_ring_t1`, `SVOtyp_slider_t1`, `mean_angle`, `gender_t1`, `age_t1`) merged in by `uniqueID`, so `attr_sear_sc` already has them from the `left_join(attr_sear_sc, demo_inkl, by = "uniqueID")` step above. We only still need to bring them into the long-format `data_search_incl`.
+
+```{r}
+# Merge SVO/demographic variables into the long-format (trial-level) data.
+data_search_incl = left_join(data_search_incl, attr_sear_sc%>%dplyr::select(uniqueID,svs_angle_t1,svs_angle_slider_t1,score_indiv_search,search_self,SVOtyp_ring_t1,SVOtyp_slider_t1,mean_angle,percentage_indiv_search, score_indiv_choice), by = "uniqueID")
+```
+
+## Demographics
+
+```{r}
+#n
+nrow(demo_inkl)
+demo_inkl$age_t1[demo_inkl$age_t1 < 18] = NA
+# Age was not preregistered as an exclusion criterion, and all participants recruited through Decision Lab Cologne (DLC) are required to be at least 18 years old, so age itself was not screened during data collection. Two participants reported implausible ages of 11 and 15; cross-referencing the original recruitment records indicates these participants were actually 20 and 21 years old (a data-entry error, possibly a younger sibling using the account), so these two values are set to NA above rather than excluding the participants outright, since their strategy descriptions were otherwise consistent with genuine participation.
+summary(demo_inkl$age_t1)
+sd(demo_inkl$age_t1, na.rm = T)
+table(demo_inkl$gender_t1)
+prop.table(table(demo_inkl$gender_t1))
+prop.table(table(demo_inkl$SVOtyp_ring_t1))
+prop.table(table(demo_inkl$SVOtyp_slider_t1))
+statuser::table2(demo_inkl$SVOtyp_ring_t1, demo_inkl$SVOtyp_slider_t1)
+statuser::desc_var(svs_angle_t1~condition_t1,data = demo_inkl)
+statuser::t.test2(svs_angle_t1~condition_t1,data = demo_inkl)
+statuser::t.test2(svs_angle_slider_t1~condition_t1,data = demo_inkl)
+length(which(demo_inkl$svs_angle_slider_t1 == 0))
+length(which(demo_inkl$svs_angle_t1 == 0))
+#this is a proportion of prototypical individualists
+(100*length(which(demo_inkl$svs_angle_t1 == 0)))/nrow(demo_inkl)
+#this is a proportion of prototypical prosocials
+(100*length(which(demo_inkl$svs_angle_t1 == 45)))/nrow(demo_inkl)
+```
+
+Time between sessions
+
+```{r}
+# Participant 185's recorded end-of-session-1 timestamp fell in April, which is not possible: the study was not yet programmed at that date, and the final version of the study only went live on 2026-06-09. Session records (matched via uniqueID) confirm this participant actually completed session 1 on 2026-06-09; the corrupted timestamp is corrected here to that date so that the between-session interval below can be computed correctly.
+demo_inkl$timestamp_end_t1[demo_inkl$uniqueID == 185] = "2026-06-09T16:08:54.379Z"
+
+demo_inkl <- demo_inkl %>%
+  mutate(
+    datum1_parsed = ymd_hms(timestamp_end_t1, tz = "UTC"),
+    datum2_parsed = ymd_hms(timestamp_start, tz = "UTC"),
+    days = as.numeric(difftime(datum2_parsed, datum1_parsed, units = "days"))
+  )
+
+# Note: one participant's records show session 2 completed on 2026-06-16, in unusually close succession to session 1, despite session-2 invitations for this participant not being sent out until 2026-06-17. This discrepancy (possibly a shared household account) is noted here for transparency but was not treated as grounds for exclusion.
+table(round(demo_inkl$days))
+summary(round(demo_inkl$days))
+```
+
+## Correlation between SVO Ring Measure and SVO Slider
+
+```{r}
+cor.test(attr_sear_sc$svs_angle_t1, attr_sear_sc$svs_angle_slider_t1)
+cor.test(attr_sear_sc$svs_angle_t1, attr_sear_sc$svs_angle_slider_t1, method = "spearman")
+
+ggplot(attr_sear_sc,aes(x=svs_angle_t1,y=svs_angle_slider_t1)) +  geom_count() +
+  labs(x = "SVO ring measure", 
+       y = "SVO slider")  +
+  geom_smooth(method = "lm")
+```
+
+```{r}
+#distribution of svo-values
+#ring
+mean(demo_inkl$svs_angle_t1)
+ggplot(demo_inkl, aes(x=svs_angle_t1)) + geom_histogram() + 
+  labs(x = "Social value orientation")  +
+  scale_x_continuous(breaks = seq(-90, 90, by=10))
+table(demo_inkl$SVOtyp_ring_t1)
+prop.table(table(demo_inkl$SVOtyp_ring_t1))
+
+#slider
+mean(demo_inkl$svs_angle_slider_t1)
+ggplot(demo_inkl, aes(x=svs_angle_slider_t1)) + geom_histogram() + 
+  labs(x = "Social value orientation")  +
+  scale_x_continuous(breaks = seq(-90, 90, by=10))
+table(demo_inkl$SVOtyp_slider_t1)
+prop.table(table(demo_inkl$SVOtyp_slider_t1))
+
+mean(demo_inkl$mean_angle)
+sd(demo_inkl$mean_angle)
+```
+
+```{r}
+demo_inkl$mean_svo_typ = ifelse(demo_inkl$mean_angle > 57.15, 1, ifelse(demo_inkl$mean_angle > 22.45 & demo_inkl$mean_angle < 57.15, 2, ifelse(demo_inkl$mean_angle < 22.45 & demo_inkl$mean_angle > -12.04, 3, ifelse(demo_inkl$mean_angle < -12.04, 4, NA))))
+
+demo_inkl$mean_svo_typ <- factor(demo_inkl$mean_svo_typ, c(1:4), c("Altruist", "Prosocial", "Individualist", "Competitive"))
+
+# Also computed for attr_sear_sc (rather than only demo_inkl), so that the same SVO type classification is directly available on the participant-level search dataset used throughout the Study 2 analyses below.
+attr_sear_sc$mean_svo_typ = ifelse(attr_sear_sc$mean_angle > 57.15, 1, ifelse(attr_sear_sc$mean_angle > 22.45 & attr_sear_sc$mean_angle < 57.15, 2, ifelse(attr_sear_sc$mean_angle < 22.45 & attr_sear_sc$mean_angle > -12.04, 3, ifelse(attr_sear_sc$mean_angle < -12.04, 4, NA))))
+
+attr_sear_sc$mean_svo_typ <- factor(attr_sear_sc$mean_svo_typ, c(1:4), c("Altruist", "Prosocial", "Individualist", "Competitive"))
+
+table(demo_inkl$mean_svo_typ)
+prop.table(table(demo_inkl$mean_svo_typ))
+```
+
+```{r}
+length(which(demo_inkl$mean_angle == 0))
+length(which(demo_inkl$mean_angle == 45))
+```
+
+```{r}
+summary(data_search_incl$num_searched_cues)
+sd(data_search_incl$num_searched_cues)
+
+summary(attr_sear_sc$mean_searched_cues)
+sd(attr_sear_sc$mean_searched_cues)
+
+length(which(attr_sear_sc$mean_searched_cues == 1))
+
+summary(attr_sear_sc$score_indiv_search)
+sd(attr_sear_sc$score_indiv_search)
+
+summary(attr_sear_sc$search_self)
+sd(attr_sear_sc$search_self)
+
+summary(attr_sear_sc$score_indiv_own_1)
+sd(attr_sear_sc$score_indiv_own_1)
+```
+
+
+
+
+
+
+```{r}
+#selfish search
+summary((attr_sear_sc$score_indiv_search/24)*100)
+sd((attr_sear_sc$score_indiv_search/24)*100)
+t.test(attr_sear_sc$score_indiv_search, mu = 12)#in 12 trials would be 50%
+ggplot(attr_sear_sc, aes(x=(score_indiv_search/24)*100)) + geom_histogram() + 
+  labs(x = "Percentage search for option with higher self-outcome")
+```
+```{r}
+#search for other
+summary((attr_sear_sc$search_self/24)*100)
+sd((attr_sear_sc$search_self/24)*100)
+t.test(attr_sear_sc$search_self, mu = 12)#in 12 trials would be 50%
+ggplot(attr_sear_sc, aes(x=(search_self/24)*100)) + geom_histogram() + 
+  labs(x = "Percentage search for other outcome")
+
+table(data_search$selfish_1,data_search$search_1_tg)
+
+barplot(table(data_search$search_1_tg,data_search$selfish_1), 
+        beside = TRUE, 
+        col = c("seagreen", "royalblue"),
+        legend.text = TRUE,
+        args.legend = list(x = "topleft", bty = "n"))
+```
+
+
+
+
+## Hypothesis tests
+
+### Correlation between SVO and ASE
+
+```{r}
+cor.test(attr_sear_sc$score_indiv_search,attr_sear_sc$svs_angle_t1)
+cor.test(attr_sear_sc$score_indiv_search,attr_sear_sc$svs_angle_slider_t1)
+cor.test(attr_sear_sc$score_indiv_search,attr_sear_sc$mean_angle)
+
+cor.test(attr_sear_sc$score_indiv_search,attr_sear_sc$svs_angle_t1, method = "spearman", alternative = "less")
+cor.test(attr_sear_sc$score_indiv_search,attr_sear_sc$svs_angle_slider_t1, method = "spearman", alternative = "less")
+cor.test(attr_sear_sc$score_indiv_search,attr_sear_sc$mean_angle, method = "spearman", alternative = "less")
+```
+
+```{r, fig.width=10,fig.height=7}
+#### final plot (Study 2, averaged ring+slider angle) ####
+
+## Uses mean_angle (averaged ring+slider angle), consistent with the SVO
+## type classification (classify_svo) and with the SVO-choice/mediation
+## analyses reported for Study 2, rather than the ring measure alone
+## (svs_angle_t1), which can disagree with the averaged classification for
+## participants whose two SVO measures diverge (e.g. one is at a ring-only
+## sadistic/altruistic extreme but the slider measure pulls the average
+## back into a different type).
+## Axis is restricted to the individualistic/cooperative range because
+## every Study 2 participant's mean_angle falls in [-22.5, 67.5] (see
+## table(s3_type) above: no altruistic/competitive-sadistic or competitive
+## cases) - unlike the Pilot Study and Study 1, so the sadistic/competitive/altruistic
+## zones would only be empty margin here.
+rect1  <- data.frame(x1=-22.5, x2=22.5,  y1=-Inf, y2=Inf)
+rect2  <- data.frame(x1=22.5,  x2=67.5,  y1=-Inf, y2=Inf)
+
+scatterP <- ggplot(data = attr_sear_sc, aes(x = mean_angle, y = percentage_indiv_search)) +
+  annotate("segment", x=-22.5, xend=67.5, y=50, yend=50, color = "black", linewidth=.5) +
+  annotate("segment", x=-22.5, xend=-22.5, y=-3, yend=100, color = "black", linewidth=.3, linetype="dotted") +
+  annotate("segment", x=0,   xend=0,   y=-3, yend=100, color = "black", linewidth=.3, linetype="dotted") +
+  annotate("segment", x=22.5, xend=22.5, y=-3, yend=100, color = "black", linewidth=.3, linetype="dotted") +
+  annotate("segment", x=45,  xend=45,  y=-3, yend=100, color = "black", linewidth=.3, linetype="dotted") +
+  annotate("segment", x=67.5,  xend=67.5,  y=-3, yend=100, color = "black", linewidth=.3, linetype="dotted") +
+  annotate("segment", x=-22.5, xend=67.5,  y=25, yend=25,  color = "black", linewidth=.3, linetype="dotted") +
+  annotate("segment", x=-22.5, xend=67.5,  y=75, yend=75,  color = "black", linewidth=.3, linetype="dotted") +
+
+  geom_smooth(method = "lm", se = FALSE, linewidth = 1, col ="grey") +
+
+  geom_count() +
+  scale_size_area(max_size=8, breaks = function(x) { b <- unique(round(scales::extended_breaks()(x))); b[b > 0] }) +
+
+  labs(x = "Social value orientation",
+       y = "Percentage of search for option with higher own payoff") +
+
+  scale_x_continuous(limits=c(-22.5,67.5), breaks=c(-22.5,0,22.5,45,67.5)) +
+  scale_y_continuous(limits=c(-5,100), breaks=c(0,10,20,30,40,50,60,70,80,90,100)) +
+
+  annotate("text", x=45,  y=-5, label="cooperative", color="black") +
+  annotate("text", x=0,   y=-5, label="individualistic", color="black") +
+
+  geom_rect(data=rect1,  mapping=aes(xmin=x1, xmax=x2, ymin=y1, ymax=y2), fill="white", alpha=0.3, inherit.aes = FALSE) +
+  geom_rect(data=rect2,  mapping=aes(xmin=x1, xmax=x2, ymin=y1, ymax=y2), fill="grey",  alpha=0.3, inherit.aes = FALSE) +
+  theme_bw()
+
+pdf("figures/study_3_main.pdf",pagecentre=T, width=10,height=7 ,paper = "special")
+
+ggMarginal(scatterP, type="densigram")
+dev.off()
+
+ggMarginal(scatterP, type = "densigram")
+```
+
+#### Multilevel regression models
+
+```{r}
+#as preregistered with mean angle
+mod_h1 = glmer(selfish_1~mean_angle + (1|uniqueID), data = data_search_incl, family = "binomial")
+summary(mod_h1)
+texreg(mod_h1)
+screenreg(mod_h1)
+exp(fixef(mod_h1))
+exp(confint(mod_h1))
+```
+
+```{r}
+#with angle calculated from the ring measure
+summary(glmer(selfish_1~svs_angle_t1 + (1|uniqueID), data = data_search_incl, family = "binomial"))
+screenreg(glmer(selfish_1~svs_angle_t1 + (1|uniqueID), data = data_search_incl, family = "binomial"))
+```
+
+```{r}
+#with angle calculated from the slider measure
+summary(glmer(selfish_1~svs_angle_slider_t1 + (1|uniqueID), data = data_search_incl, family = "binomial"))
+screenreg(glmer(selfish_1~svs_angle_slider_t1 + (1|uniqueID), data = data_search_incl, family = "binomial"))
+```
+
+### Exploratory categories (individual search)
+
+participants with angle greater and smaller than 45
+
+```{r}
+attr_sear_sc$cat_angle = ifelse(attr_sear_sc$mean_angle >= 45, "large", "small")
+table(attr_sear_sc$cat_angle)
+prop.table(table(attr_sear_sc$cat_angle))
+
+attr_sear_sc$indiv_higher_75 = ifelse(attr_sear_sc$score_indiv_search >= 18, 1, 0)#75% = 18 Trials out of 24
+table2(attr_sear_sc$cat_angle,attr_sear_sc$indiv_higher_75)
+prop.table(table(attr_sear_sc$cat_angle,attr_sear_sc$indiv_higher_75),1)
+
+attr_sear_sc$indiv_less_25 = ifelse(attr_sear_sc$score_indiv_search <= 6, 1, 0)#25% = 6 Trials out of 24
+table2(attr_sear_sc$cat_angle,attr_sear_sc$indiv_less_25)
+prop.table(table(attr_sear_sc$cat_angle,attr_sear_sc$indiv_less_25),1)
+
+attr_sear_sc$no_bias = ifelse(attr_sear_sc$indiv_higher_75 == 0 & attr_sear_sc$indiv_less_25 == 0, 1, 0)
+table2(attr_sear_sc$cat_angle,attr_sear_sc$no_bias)
+prop.table(table(attr_sear_sc$cat_angle,attr_sear_sc$no_bias),1)
+```
+
+```{r}
+table(data_search_incl$selfish_1,data_search_incl$type_choice_after1)# The more relevant distinction here is Option a vs. b, since only the selfish/prosocial types were possible in the first round.
+table2(data_search_incl$choice, data_search_incl$type_choice_after1,data_search_incl$search_1_opt)
+
+table2(search_1_opt, choice, data = subset(data_search_incl, data_search_incl$type_choice_after1 != "undecided yet"))
+
+table2(choice, type_choice_after1, search_1_opt, data = subset(data_search_incl, data_search_incl$type_choice_after1 != "undecided yet"))
+
+table(data_search_incl$choice[data_search_incl$type_choice_after1 != "undecided yet"], data_search_incl$type_choice_after1[data_search_incl$type_choice_after1 != "undecided yet"], data_search_incl$search_1_opt[data_search_incl$type_choice_after1 != "undecided yet"])
+
+prop.table(table(data_search_incl$choice[data_search_incl$type_choice_after1 != "undecided yet"], data_search_incl$type_choice_after1[data_search_incl$type_choice_after1 != "undecided yet"], data_search_incl$search_1_opt[data_search_incl$type_choice_after1 != "undecided yet"]),1)
+```
+
+
+
+### Correlation between SVO and search target
+
+```{r}
+cor.test(attr_sear_sc$search_other,attr_sear_sc$svs_angle_t1)
+cor.test(attr_sear_sc$search_other,attr_sear_sc$svs_angle_slider_t1)
+cor.test(attr_sear_sc$search_other,attr_sear_sc$mean_angle)
+
+cor.test(attr_sear_sc$search_other,attr_sear_sc$svs_angle_t1, method = "spearman", alternative = "greater")
+cor.test(attr_sear_sc$search_other,attr_sear_sc$svs_angle_slider_t1, method = "spearman", alternative = "greater")
+cor.test(attr_sear_sc$search_other,attr_sear_sc$mean_angle, method = "spearman", alternative = "greater")
+```
+Note: the preregistered directional hypothesis was framed as a negative correlation between SVO and search for one's own outcome; the one-sided tests above and below are specified accordingly (`alternative = "greater"` for search of the other's outcome, `alternative = "less"` for search of one's own outcome).
+
+```{r}
+cor.test(attr_sear_sc$search_self,attr_sear_sc$svs_angle_t1)
+cor.test(attr_sear_sc$search_self,attr_sear_sc$svs_angle_slider_t1)
+cor.test(attr_sear_sc$search_self,attr_sear_sc$mean_angle)
+
+cor.test(attr_sear_sc$search_self,attr_sear_sc$svs_angle_t1, method = "spearman", alternative = "less")
+cor.test(attr_sear_sc$search_self,attr_sear_sc$svs_angle_slider_t1, method = "spearman", alternative = "less")
+cor.test(attr_sear_sc$search_self,attr_sear_sc$mean_angle, method = "spearman", alternative = "less")
+
+plot(attr_sear_sc$svs_angle_t1,attr_sear_sc$search_self)
+plot(attr_sear_sc$svs_angle_slider_t1,attr_sear_sc$search_self)
+plot(attr_sear_sc$mean_angle,attr_sear_sc$search_self)
+```
+```{r}
+# Also expressed as a percentage (of the 24 trials) alongside the raw count above, for comparability with the percentage-based measures reported elsewhere in the manuscript.
+attr_sear_sc$percentage_self = (attr_sear_sc$search_self/24)*100
+
+cor.test(attr_sear_sc$percentage_self,attr_sear_sc$svs_angle_t1)
+cor.test(attr_sear_sc$percentage_self,attr_sear_sc$svs_angle_slider_t1)
+cor.test(attr_sear_sc$percentage_self,attr_sear_sc$mean_angle)
+
+cor.test(attr_sear_sc$percentage_self,attr_sear_sc$svs_angle_t1, method = "spearman", alternative = "less")
+cor.test(attr_sear_sc$percentage_self,attr_sear_sc$svs_angle_slider_t1, method = "spearman", alternative = "less")
+cor.test(attr_sear_sc$percentage_self,attr_sear_sc$mean_angle, method = "spearman", alternative = "less")
+
+plot(attr_sear_sc$svs_angle_t1,attr_sear_sc$percentage_self)
+plot(attr_sear_sc$svs_angle_slider_t1,attr_sear_sc$percentage_self)
+plot(attr_sear_sc$mean_angle,attr_sear_sc$percentage_self)
+```
+
+
+
+#### Multilevel regression models
+
+```{r}
+#as preregistered with mean angle
+data_search_incl$search_self_out_1 = ifelse(data_search_incl$search_1_tg == "self", 1, 0)
+mod_h2 = glmer(search_self_out_1~mean_angle + (1|uniqueID), data = data_search_incl, family = "binomial")
+summary(mod_h2)
+texreg(mod_h2)
+screenreg(mod_h2)
+
+exp(fixef(mod_h2))
+exp(confint(mod_h2, parm = "beta_", devmatchtol = 1e-4))
+```
+
+```{r}
+#with angle calculated from the ring measure
+summary(glmer(search_self_out_1~svs_angle_t1 + (1|uniqueID), data = data_search_incl, family = "binomial"))
+screenreg(glmer(search_self_out_1~svs_angle_t1 + (1|uniqueID), data = data_search_incl, family = "binomial"))
+```
+
+```{r}
+#with angle calculated from the slider measure
+summary(glmer(search_self_out_1~svs_angle_slider_t1 + (1|uniqueID), data = data_search_incl, family = "binomial"))
+screenreg(glmer(search_self_out_1~svs_angle_slider_t1 + (1|uniqueID), data = data_search_incl, family = "binomial"))
+```
+
+### Correlation between ASE, SVO, and choice
+
+```{r}
+table2(data_search_incl$search_1_opt, data_search_incl$choice)
+prop.table(table(data_search_incl$search_1_opt, data_search_incl$choice))
+```
+
+```{r}
+cor.test(attr_sear_sc$proso_search, attr_sear_sc$score_proso_choice, method = "spearman", alternative = "greater")
+plot(attr_sear_sc$proso_search, attr_sear_sc$score_proso_choice)
+
+cor.test(attr_sear_sc$mean_angle, attr_sear_sc$score_proso_choice, method = "spearman", alternative = "greater")
+plot(attr_sear_sc$mean_angle, attr_sear_sc$score_proso_choice)
+```
+```{r}
+library(mediation)
+fit.mediator=lm(proso_search~mean_angle,data=attr_sear_sc)
+fit.dv=lm(score_proso_choice~mean_angle+proso_search,data=attr_sear_sc)
+
+results = mediate(fit.mediator, fit.dv, treat="mean_angle", 
+                  mediator="proso_search", boot=T)
+
+summary(results)
+```
+
+
+```{r}
+cor.test(attr_sear_sc$score_indiv_search, attr_sear_sc$pct_chose_a, method = "spearman", alternative = "greater")
+plot(attr_sear_sc$score_indiv_search, attr_sear_sc$pct_chose_a)
+
+cor.test(attr_sear_sc$mean_angle, attr_sear_sc$pct_chose_a, method = "spearman", alternative = "less")
+plot(attr_sear_sc$mean_angle, attr_sear_sc$pct_chose_a)
+```
+
+```{r}
+## Mediation outcome: pct_chose_a (already computed above, right after
+## data_search_incl/attr_sear_sc were finalized) - the raw proportion (0-1)
+## of trials in which the participant's FINAL choice was Option A (= Option 2
+## in the manuscript, the higher-own-payoff option). Deliberately NOT the
+## "selfish/prosocial/dominant/inferior" type_choice_final classification
+## (score_indiv_choice), because that classification is itself partly
+## computed from whatever information search had revealed by the time of
+## choice (see type_left_N/type_right_N above, built from the progressively-
+## revealed visible_* amounts). Using it as the mediation outcome would make
+## the "mediator" (search) and "outcome" (choice type) share part of their
+## very definition, rather than being independently measured constructs
+## linked only through the participant's behavior. pct_chose_a avoids this:
+## it is defined exactly like the search mediator (did they go toward Option
+## A?), just at the choice stage instead of the search stage.
+fit.mediator=lm(score_indiv_search~mean_angle,data=attr_sear_sc)
+fit.dv=lm(pct_chose_a~mean_angle+score_indiv_search,data=attr_sear_sc)
+
+results = mediate(fit.mediator, fit.dv, treat="mean_angle",
+                  mediator="score_indiv_search", boot=T)
+
+summary(results)
+```
+
+# Exploratory: Search behavior beyond the first search
+
+Exploratory, not preregistered. Study 2 allowed up to eight searches per trial (two hidden amounts per attribute, for two attributes, for two options). So far we have only characterized the *first* search. Here we track both hypothesized biases -- the ASE (does search target the option that already looked more attractive, before any search?) and the own-outcome bias (does search target one's own payoff rather than the other's?) -- across the full sequence of searches within a trial, for participants who kept searching.
+
+A naive test against 50% chance is only valid for the very first search. From the second search onward, whatever was already revealed mechanically shrinks and skews the pool of cues still available (e.g., if the first search already revealed one of the two hidden self-amounts of the preferred option, only 7 of the original 8 cues remain, and they are no longer split 50/50 between "preferred option" and "self attribute"). We therefore compute, for every trial and every search step, the *chance level implied by whichever cues are still unrevealed at that point*, and test observed search behavior against that trial-specific chance level rather than a flat 50%.
+
+```{r}
+## --- Step 0: each participant's own SVO-implied weights ---
+## The SVO ring/slider angle can be read as a point on the unit circle in
+## (w_own, w_other) space (see the SVO circle figure and the SVO_j formula in
+## the Method section): w_own = cos(angle), w_other = sin(angle). This turns
+## the single-number SVO angle back into two weights we can apply directly to
+## payoffs, participant by participant.
+attr_sear_sc$w_own   = cos(attr_sear_sc$mean_angle * pi / 180)
+attr_sear_sc$w_other = sin(attr_sear_sc$mean_angle * pi / 180)
+
+data_search_incl = left_join(
+  data_search_incl,
+  attr_sear_sc %>% dplyr::select(uniqueID, w_own, w_other),
+  by = "uniqueID"
+)
+
+## how many participants weight their own payoff more heavily than the
+## other's? (referenced in the Decision Accuracy section, to explain why
+## own-outcome-consistent search helps so broadly)
+cat("N participants with w_own > w_other:", sum(attr_sear_sc$w_own > attr_sear_sc$w_other),
+    "of", nrow(attr_sear_sc),
+    sprintf("(%.1f%%)", 100 * mean(attr_sear_sc$w_own > attr_sear_sc$w_other)), "\n")
+cat("Mean w_own:", round(mean(attr_sear_sc$w_own), 2), " Mean w_other:", round(mean(attr_sear_sc$w_other), 2), "\n")
+
+## --- Step 1: which option looked more attractive BEFORE any search? ---
+## Using only the always-visible amounts (start_self_*, start_other_*) and
+## the participant's own weights - this is the participant's own
+## visible-only, pre-search attractiveness judgement, i.e. the option the ASE
+## predicts they should be drawn to search first.
+U_visible_a = data_search_incl$w_own * data_search_incl$start_self_a +
+              data_search_incl$w_other * data_search_incl$start_other_a
+U_visible_b = data_search_incl$w_own * data_search_incl$start_self_b +
+              data_search_incl$w_other * data_search_incl$start_other_b
+
+## exact ties happen when w_own == w_other (SVO angle == 45 degrees exactly)
+## AND the visible totals happen to coincide - true for exactly one
+## participant/trial in this sample. Broken with a coin flip, as elsewhere.
+set.seed(42)
+tie_break_pref = sample(c("a", "b"), nrow(data_search_incl), replace = TRUE)
+data_search_incl$preferred_option = ifelse(
+  U_visible_a > U_visible_b, "a", ifelse(
+  U_visible_a < U_visible_b, "b", tie_break_pref))
+
+## --- Step 2: reconstruct, cue by cue, exactly what each search revealed ---
+## searched_cue_1 .. searched_cue_8 record the raw click (e.g. "self_left_1"),
+## which we translate into a canonical, screen-side-independent identity
+## (one of self_a_1, self_a_2, self_b_1, self_b_2, other_a_1, other_a_2,
+## other_b_1, other_b_2) using optionSide (whether A was shown on the left or
+## right that trial).
+canonical_cue_id = function(raw_cue, option_side) {
+  opt = ifelse(
+    grepl("left", raw_cue)  & option_side == "A_left", "a", ifelse(
+    grepl("left", raw_cue)  & option_side == "B_left", "b", ifelse(
+    grepl("right", raw_cue) & option_side == "A_left", "b", ifelse(
+    grepl("right", raw_cue) & option_side == "B_left", "a", NA))))
+  attribute = ifelse(grepl("self", raw_cue), "self", ifelse(grepl("other", raw_cue), "other", NA))
+  piece = ifelse(grepl("_1$", raw_cue), "1", ifelse(grepl("_2$", raw_cue), "2", NA))
+  ## paste() turns NA components into the literal string "NA", not an NA
+  ## value (e.g. paste(NA, NA, NA) -> "NA_NA_NA", not NA) - so trials that
+  ## did not reach this search step (no raw_cue recorded) must be forced
+  ## back to a real NA here, or every trial would look like it "reached"
+  ## every one of the 8 steps.
+  ifelse(is.na(opt) | is.na(attribute) | is.na(piece), NA_character_,
+         paste(attribute, opt, piece, sep = "_"))
+}
+
+canonical_slots = c("self_a_1", "self_a_2", "self_b_1", "self_b_2",
+                     "other_a_1", "other_a_2", "other_b_1", "other_b_2")
+slot_option    = c("a", "a", "b", "b", "a", "a", "b", "b")
+slot_attribute = c("self", "self", "self", "self", "other", "other", "other", "other")
+
+cue_id_by_step = matrix(NA, nrow = nrow(data_search_incl), ncol = 8)
+for (step in 1:8) {
+  raw_col = paste0("searched_cue_", step)
+  cue_id_by_step[, step] = canonical_cue_id(data_search_incl[[raw_col]], data_search_incl$optionSide)
+}
+```
+
+```{r}
+## --- Step 3: for each search step, compare observed behavior to the
+## trial-specific chance level (given whatever remains unrevealed) ---
+table1_rows = list()
+
+for (step in 1:4) {
+
+  ## which of the 8 canonical slots are still unrevealed going into this step
+  ## (i.e. were not among the cues revealed in steps 1 .. step-1)?
+  already_revealed = matrix(FALSE, nrow = nrow(data_search_incl), ncol = 8)
+  if (step > 1) {
+    for (prior_step in 1:(step - 1)) {
+      for (slot in 1:8) {
+        already_revealed[, slot] = already_revealed[, slot] |
+          (cue_id_by_step[, prior_step] == canonical_slots[slot])
+      }
+    }
+  }
+  still_available = !already_revealed
+
+  reached_this_step = which(!is.na(cue_id_by_step[, step]))
+  n_reached = length(reached_this_step)
+  if (n_reached < 5) next
+
+  avail = still_available[reached_this_step, , drop = FALSE]
+  n_available = rowSums(avail)
+
+  is_pref_slot = matrix(rep(slot_option, each = n_reached), nrow = n_reached) ==
+    data_search_incl$preferred_option[reached_this_step]
+  is_self_slot = matrix(rep(slot_attribute, each = n_reached), nrow = n_reached) == "self"
+
+  ## chance level = share of the STILL-AVAILABLE cues that belong to the
+  ## preferred option / self attribute, respectively - this is what a
+  ## participant picking uniformly at random among whatever is left would
+  ## be expected to do, and it is NOT 50/50 once earlier searches have used
+  ## up some of the pool asymmetrically.
+  chance_pref = rowSums(avail & is_pref_slot) / n_available
+  chance_self = rowSums(avail & is_self_slot) / n_available
+
+  actual_id  = cue_id_by_step[reached_this_step, step]
+  actual_opt = slot_option[match(actual_id, canonical_slots)]
+  actual_att = slot_attribute[match(actual_id, canonical_slots)]
+
+  observed_pref = as.numeric(actual_opt == data_search_incl$preferred_option[reached_this_step])
+  observed_self = as.numeric(actual_att == "self")
+
+  ## one-sample t-test of each trial's own (observed - chance) deviation
+  ## against 0 - this is the test that properly accounts for the
+  ## trial-specific, step-specific chance level, instead of a flat 50%.
+  test_pref = t.test(observed_pref - chance_pref)
+  test_self = t.test(observed_self - chance_self)
+
+  table1_rows[[step]] = data.frame(
+    step = step,
+    n = n_reached,
+    pct_of_all_trials = round(100 * n_reached / nrow(data_search_incl), 1),
+    ase_observed = round(100 * mean(observed_pref), 1),
+    ase_chance   = round(100 * mean(chance_pref), 1),
+    ase_deviation_pp = round(100 * as.numeric(test_pref$estimate), 1),
+    ase_p = signif(test_pref$p.value, 2),
+    ownoutcome_observed = round(100 * mean(observed_self), 1),
+    ownoutcome_chance   = round(100 * mean(chance_self), 1),
+    ownoutcome_deviation_pp = round(100 * as.numeric(test_self$estimate), 1),
+    ownoutcome_p = signif(test_self$p.value, 2)
+  )
+}
+
+table1 = do.call(rbind, table1_rows)
+table1
+```
+
+# Exploratory: Does search direction improve decision accuracy?
+
+Exploratory, not preregistered. The previous section shows the ASE is a brief, first-search-only phenomenon that reverses by the third search, whereas the own-outcome bias is large and persistent. Here we ask what these two biases actually buy (or cost) participants in terms of *decision quality*: how often does a given search strategy lead to correctly identifying the option that a participant's own SVO weights say is truly best, once all eight pieces of information are known?
+
+We compare six strategies, all evaluated against the same target for each participant/trial: the option with the higher SVO-weighted utility using the *complete* payoff information ($U = w_{own} \times \text{self total} + w_{other} \times \text{other total}$), i.e. what a fully-informed, noise-free version of that same participant would choose.
+
+1. **Fully random search**: picks cues uniformly at random from all 8 (any attribute, either option) -- the no-bias baseline.
+2. **ASE-consistent search only**: restricted to the 4 cues belonging to whichever option already looked more attractive before any search (the `preferred_option` computed above); which attribute is picked at random. Isolates the option-direction bias alone.
+3. **Own-outcome-consistent search only**: restricted to the 4 self-payoff cues (2 per option); which option is picked at random. Isolates the attribute-direction bias alone.
+4. **Both biases combined (idealized)**: restricted to just the 2 self-payoff cues of the preferred option -- what a participant would do if they applied both biases simultaneously and rigidly, with no further exploration. (Because this pool has only 2 cues, this strategy is only meaningfully distinct from "no more information" for k=1 and k=2; at k=3/4 it would have already exhausted its pool, so those cells are not reported.)
+5. **Real search + idealized decision**: participants' *actual* recorded search (reconstructed cue by cue, as above), but paired with the same idealized, noise-free weighted decision rule used for strategies 1-4. Isolates real search *quality*, independent of any noise in how people actually decide given what they found.
+6. **Real search + actual decision**: participants' actual search *and* their actual recorded choice - the true empirical accuracy, including whatever noise or deviation from the idealized rule real decision-making involves.
+
+Comparing 5 vs. 6 (paired, same trials) isolates the contribution of decision-making noise; comparing 5 vs. 1-4 isolates the contribution of search quality/direction.
+
+```{r}
+## --- Ground truth target: fully-informed, own-weights-optimal choice ---
+U_true_a = data_search_incl$w_own * data_search_incl$self_a + data_search_incl$w_other * data_search_incl$other_a
+U_true_b = data_search_incl$w_own * data_search_incl$self_b + data_search_incl$w_other * data_search_incl$other_b
+data_search_incl$true_optimal = ifelse(U_true_a > U_true_b, "a", ifelse(U_true_a < U_true_b, "b", NA))
+
+## the 8 canonical cue amounts, in a fixed column order used throughout:
+## 1-2 = self_a, 3-4 = self_b, 5-6 = other_a, 7-8 = other_b
+cue_amounts = cbind(
+  data_search_incl$hidden_self_a_1, data_search_incl$hidden_self_a_2,
+  data_search_incl$hidden_self_b_1, data_search_incl$hidden_self_b_2,
+  data_search_incl$hidden_other_a_1, data_search_incl$hidden_other_a_2,
+  data_search_incl$hidden_other_b_1, data_search_incl$hidden_other_b_2
+)
+cue_amounts[is.na(cue_amounts)] = 0
+
+## fast within-row random k-of-m cue selection: rank m uniform draws per row,
+## keep the k smallest - a vectorized alternative to sampling row by row.
+topk_mask = function(rank_matrix, k) {
+  m = ncol(rank_matrix)
+  if (k >= m) return(matrix(TRUE, nrow(rank_matrix), m))
+  threshold = apply(rank_matrix, 1, function(x) sort(x)[k])
+  rank_matrix <= threshold
+}
+
+## simulate a strategy restricted to a fixed subset of the 8 cue columns
+## (col_idx), revealing k_eff = min(num_searched, pool size) of them at
+## random, then applying the idealized weighted decision rule. Averaged over
+## `iterations` random draws per trial to marginalize out which specific
+## cues happened to be drawn.
+simulate_restricted_random_strategy = function(col_idx, depths = 1:4, iterations = 500) {
+  pool_size = length(col_idx)
+  result = list()
+  for (k in depths) {
+    idx_k = which(data_search_incl$num_searched_cues == k)
+    n_k = length(idx_k)
+    if (n_k < 5) { result[[as.character(k)]] = NA; next }
+    k_eff = min(k, pool_size)
+
+    w_own_k = data_search_incl$w_own[idx_k]; w_other_k = data_search_incl$w_other[idx_k]
+    start_self_a_k = data_search_incl$start_self_a[idx_k]; start_self_b_k = data_search_incl$start_self_b[idx_k]
+    start_other_a_k = data_search_incl$start_other_a[idx_k]; start_other_b_k = data_search_incl$start_other_b[idx_k]
+    true_opt_k = data_search_incl$true_optimal[idx_k]
+    cues_k = cue_amounts[idx_k, , drop = FALSE]
+
+    accuracy_per_iteration = numeric(iterations)
+    for (r in 1:iterations) {
+      rank_matrix = matrix(runif(n_k * pool_size), ncol = pool_size)
+      revealed_sub = topk_mask(rank_matrix, k_eff)
+      revealed_full = matrix(FALSE, nrow = n_k, ncol = 8)
+      revealed_full[, col_idx] = revealed_sub
+      revealed_vals = cues_k * revealed_full
+
+      self_a_rev  = start_self_a_k  + revealed_vals[, 1] + revealed_vals[, 2]
+      self_b_rev  = start_self_b_k  + revealed_vals[, 3] + revealed_vals[, 4]
+      other_a_rev = start_other_a_k + revealed_vals[, 5] + revealed_vals[, 6]
+      other_b_rev = start_other_b_k + revealed_vals[, 7] + revealed_vals[, 8]
+
+      U_a = w_own_k * self_a_rev + w_other_k * other_a_rev
+      U_b = w_own_k * self_b_rev + w_other_k * other_b_rev
+      tie_break = sample(c("a", "b"), n_k, replace = TRUE)
+      choice_sim = ifelse(U_a > U_b, "a", ifelse(U_a < U_b, "b", tie_break))
+
+      accuracy_per_iteration[r] = mean(choice_sim == true_opt_k, na.rm = TRUE)
+    }
+    result[[as.character(k)]] = 100 * mean(accuracy_per_iteration)
+  }
+  result
+}
+
+## same idea, but the 4-cue "restricted" pool is option-DIRECTED: it is
+## whichever option looks preferred for THAT trial/participant, not a fixed
+## pair of columns - so this one needs its own loop instead of reusing
+## simulate_restricted_random_strategy() directly.
+simulate_option_directed_strategy = function(attribute_pool = "both", depths = 1:4, iterations = 500) {
+  pool_size = if (attribute_pool == "both") 4 else 2
+  result = list()
+  for (k in depths) {
+    idx_k = which(data_search_incl$num_searched_cues == k & !is.na(data_search_incl$preferred_option))
+    n_k = length(idx_k)
+    if (n_k < 5) { result[[as.character(k)]] = NA; next }
+    k_eff = min(k, pool_size)
+
+    w_own_k = data_search_incl$w_own[idx_k]; w_other_k = data_search_incl$w_other[idx_k]
+    start_self_a_k = data_search_incl$start_self_a[idx_k]; start_self_b_k = data_search_incl$start_self_b[idx_k]
+    start_other_a_k = data_search_incl$start_other_a[idx_k]; start_other_b_k = data_search_incl$start_other_b[idx_k]
+    true_opt_k = data_search_incl$true_optimal[idx_k]
+    pref_k = data_search_incl$preferred_option[idx_k]
+    cues_k = cue_amounts[idx_k, , drop = FALSE]
+    is_a = pref_k == "a"
+
+    col_set_a = if (attribute_pool == "both") c(1, 2, 5, 6) else c(1, 2)
+    col_set_b = if (attribute_pool == "both") c(3, 4, 7, 8) else c(3, 4)
+
+    accuracy_per_iteration = numeric(iterations)
+    for (r in 1:iterations) {
+      rank_matrix = matrix(runif(n_k * pool_size), ncol = pool_size)
+      revealed_sub = topk_mask(rank_matrix, k_eff)
+      revealed_full = matrix(FALSE, nrow = n_k, ncol = 8)
+      revealed_full[is_a, col_set_a]  = revealed_sub[is_a, ]
+      revealed_full[!is_a, col_set_b] = revealed_sub[!is_a, ]
+      revealed_vals = cues_k * revealed_full
+
+      self_a_rev  = start_self_a_k  + revealed_vals[, 1] + revealed_vals[, 2]
+      self_b_rev  = start_self_b_k  + revealed_vals[, 3] + revealed_vals[, 4]
+      other_a_rev = start_other_a_k + revealed_vals[, 5] + revealed_vals[, 6]
+      other_b_rev = start_other_b_k + revealed_vals[, 7] + revealed_vals[, 8]
+
+      U_a = w_own_k * self_a_rev + w_other_k * other_a_rev
+      U_b = w_own_k * self_b_rev + w_other_k * other_b_rev
+      tie_break = sample(c("a", "b"), n_k, replace = TRUE)
+      choice_sim = ifelse(U_a > U_b, "a", ifelse(U_a < U_b, "b", tie_break))
+
+      accuracy_per_iteration[r] = mean(choice_sim == true_opt_k, na.rm = TRUE)
+    }
+    result[[as.character(k)]] = 100 * mean(accuracy_per_iteration)
+  }
+  result
+}
+
+strategy_fully_random   = simulate_restricted_random_strategy(1:8)                  # baseline, no bias
+strategy_ownoutcome_only = simulate_restricted_random_strategy(1:4)                 # self cues only, either option
+strategy_ase_only        = simulate_option_directed_strategy("both")                # preferred option, either attribute
+strategy_both_combined   = simulate_option_directed_strategy("self")                # preferred option, self only
+
+strategy_fully_random
+strategy_ownoutcome_only
+strategy_ase_only
+strategy_both_combined
+```
+
+```{r}
+## --- Real search, reconstructed cue by cue, under the idealized decision rule ---
+revealed_mask_real = matrix(FALSE, nrow = nrow(data_search_incl), ncol = 8)
+colnames(revealed_mask_real) = canonical_slots
+for (step in 1:8) {
+  for (slot in 1:8) {
+    hit = which(cue_id_by_step[, step] == canonical_slots[slot])
+    revealed_mask_real[hit, slot] = TRUE
+  }
+}
+revealed_vals_real = cue_amounts * revealed_mask_real
+
+self_a_rev_real  = data_search_incl$start_self_a  + revealed_vals_real[, 1] + revealed_vals_real[, 2]
+self_b_rev_real  = data_search_incl$start_self_b  + revealed_vals_real[, 3] + revealed_vals_real[, 4]
+other_a_rev_real = data_search_incl$start_other_a + revealed_vals_real[, 5] + revealed_vals_real[, 6]
+other_b_rev_real = data_search_incl$start_other_b + revealed_vals_real[, 7] + revealed_vals_real[, 8]
+
+U_a_real = data_search_incl$w_own * self_a_rev_real + data_search_incl$w_other * other_a_rev_real
+U_b_real = data_search_incl$w_own * self_b_rev_real + data_search_incl$w_other * other_b_rev_real
+tie_break_real = sample(c("a", "b"), nrow(data_search_incl), replace = TRUE)
+data_search_incl$choice_idealized_given_real_search = ifelse(
+  U_a_real > U_b_real, "a", ifelse(U_a_real < U_b_real, "b", tie_break_real))
+
+data_search_incl$match_idealized = data_search_incl$choice_idealized_given_real_search == data_search_incl$true_optimal
+data_search_incl$match_actual    = data_search_incl$choice == data_search_incl$true_optimal
+
+table2 = data_search_incl %>%
+  filter(num_searched_cues %in% 1:4) %>%
+  group_by(num_searched_cues) %>%
+  summarise(
+    n = n(),
+    pct_of_all_trials = round(100 * n() / nrow(data_search_incl), 1),
+    real_idealized_decision = round(100 * mean(match_idealized, na.rm = TRUE), 1),
+    real_actual_decision    = round(100 * mean(match_actual, na.rm = TRUE), 1)
+  )
+table2
+```
+
+```{r}
+## --- Significance tests for Table 2 ---
+## (a) Real search + actual decision vs Real search + idealized decision:
+## SAME trials evaluated two ways -> paired McNemar's test. This isolates
+## the effect of real human DECISION-MAKING, holding real search constant.
+for (k in 1:4) {
+  idx_k = which(data_search_incl$num_searched_cues == k)
+  cat("\n--- k =", k, "---\n")
+  paired_tab = table(idealized = data_search_incl$match_idealized[idx_k],
+                      actual = data_search_incl$match_actual[idx_k])
+  print(mcnemar.test(paired_tab))
+}
+```
+
+# Exploratory: Gender and age as moderators
+
+Exploratory, not preregistered. Rather than testing each study separately (each is individually underpowered to detect a moderation effect), we pool participant-level data across all three studies and include a study dummy to account for baseline differences between studies (e.g., different paradigms, incentive structures). This directly tests whether gender and/or age moderate the SVO-search relationship, with much more power than any single study provides.
+
+First, we build one row per participant per study (gender, age, SVO angle, and the participant-level percentage of searches for the higher-own-payoff option), harmonizing gender labels (the Pilot Study uses numeric codes, Study 1 and Study 2 use text) into a common female/male coding.
+
+```{r}
+## Pilot Study: gender, SVO, and search percentage per participant
+gender_s1 = as.character(dats_s1$v_133_Geschlecht)
+svo_gender_s1 = data.frame(gender = gender_s1, SVO = res$SVO_part, search_pct = res$ASE_pros_m, age = dats_s1$v_132_alter)
+
+## Study 1: gender is stored as raw German text ("weiblich"/"maennlich"); recode to female/male
+gender_s2_raw = dats_s2_1$Sex
+gender_s2 = ifelse(grepl("^f", gender_s2_raw, ignore.case = TRUE), "female",
+             ifelse(grepl("nnlich$", gender_s2_raw, ignore.case = TRUE) | grepl("^male$", gender_s2_raw, ignore.case = TRUE), "male", NA))
+svo_gender_s2 = data.frame(gender = gender_s2, SVO = res_fin$SVO_part, search_pct = res_fin$ASE_pros_m, age = dats_s2_1$Age)
+
+## Study 2: gender_t1/age_t1 are already merged into attr_sear_sc (via the demo_inkl join used to build it above), so we can read them directly
+svo_gender_s3 = data.frame(gender = attr_sear_sc$gender_t1, SVO = attr_sear_sc$mean_angle,
+                           search_pct = attr_sear_sc$percentage_indiv_search, age = attr_sear_sc$age_t1)
+
+## harmonize gender coding to female/male and stack all three studies into one data frame
+s1h = svo_gender_s1
+s1h$gender_h = ifelse(s1h$gender == "1", "female", ifelse(s1h$gender == "2", "male", NA))
+s1h$study = "Pilot Study"
+
+s2h = svo_gender_s2
+s2h$gender_h = ifelse(s2h$gender == "female", "female", ifelse(s2h$gender == "male", "male", NA))
+s2h$study = "Study 1"
+
+s3h = svo_gender_s3
+s3h$gender_h = ifelse(s3h$gender == "female", "female", ifelse(s3h$gender == "male", "male", NA))
+s3h$study = "Study 2"
+
+combined = rbind(
+  data.frame(study = s1h$study, gender = s1h$gender_h, SVO = s1h$SVO, age = s1h$age, search_pct = s1h$search_pct),
+  data.frame(study = s2h$study, gender = s2h$gender_h, SVO = s2h$SVO, age = s2h$age, search_pct = s2h$search_pct),
+  data.frame(study = s3h$study, gender = s3h$gender_h, SVO = s3h$SVO, age = s3h$age, search_pct = s3h$search_pct)
+)
+
+## drop diverse/no-answer/missing-age rows: too few for a stable estimate
+combined = subset(combined, gender %in% c("female","male") & !is.na(age))
+combined$study = as.factor(combined$study)
+combined$gender = as.factor(combined$gender)
+
+table(combined$study)
+```
+
+## SVO by gender and by age (pooled)
+
+```{r}
+t.test(SVO ~ gender, data = combined)
+cor.test(combined$SVO, combined$age, method = "spearman")
+```
+
+## Does gender or age moderate the SVO-search relationship? (pooled)
+
+```{r}
+## Model 1: SVO x gender + SVO x age, controlling for study (main effect / dummy)
+mod_combined_1 = lm(search_pct ~ SVO * gender + SVO * age + study, data = combined)
+summary(mod_combined_1)
+
+## Model 2: robustness check -- does the SVO-search slope itself differ by study?
+## (if it did, pooling would be questionable; it does not, supporting the pooled model above)
+mod_combined_2 = lm(search_pct ~ SVO * gender + SVO * age + SVO * study, data = combined)
+summary(mod_combined_2)
+
+## Model 3: does the gender-moderation itself differ by study (3-way interaction)?
+## (it does not, i.e. the gender effect is consistent in direction/size across studies,
+## it was just individually underpowered within each single study)
+mod_combined_3 = lm(search_pct ~ SVO * gender * study + age, data = combined)
+summary(mod_combined_3)
+```
+
+# Exploratory: Left/right response bias
+
+Exploratory, not preregistered. We check whether participants' actual clicks (screen position, independent of which option happened to be presented on which side) were biased toward left or right. As with the gender/age analysis above, we pool participant-level left-click percentages across studies, with a study dummy, rather than testing each study in isolation.
+
+The Pilot Study cannot be checked: its raw search-response variable (e.g., `v_57_ase_item_1`) only contains flat numeric codes (1-4) with no separate left/right field. Option position was randomized in the Pilot Study too (per the Supplement's Procedure), but unlike the custom-built tasks in Study 1 and Study 2, which side each option appeared on per trial was not logged in the raw data, so this specific check cannot be reconstructed post hoc.
+
+Note also that "left/right" here specifically means the actual search click, not the subsequent choice, and not simply which side Option A/B happened to be presented on (that side is randomized by design and is not itself of interest).
+
+```{r}
+## Study 1, search phase (Session 2): per-participant % of search clicks on the left,
+## from the raw wide matrix (one row per participant, one column per trial).
+## Restricted to incl==1 (the same 20 real-conflict items used for every other
+## Study 1 search statistic, see `search = search[,incl == 1]` above) - the raw
+## 24 columns also include the 4 dominant/inferior filler items that are
+## excluded everywhere else, so including them here would make this the only
+## Study 1 statistic in the paper computed over a different trial set.
+s2_search_wide = dats_s2_2 %>% dplyr::select(contains("search") & !contains("Time") & !contains("example"))
+s2_search_wide = s2_search_wide[, incl == 1]
+s2_pct_left = rowMeans(s2_search_wide == "Verdeckter Betrag der linken Option", na.rm = TRUE) * 100
+
+## Study 2, first search click: long format (one row per trial), aggregate to per participant
+s3_pct_left = data_search_incl %>% group_by(uniqueID) %>%
+  summarise(pct_left = mean(search_1_side == "left", na.rm = TRUE) * 100)
+
+combined_lr = rbind(
+  data.frame(study = "Study 1", pct_left = s2_pct_left),
+  data.frame(study = "Study 2", pct_left = s3_pct_left$pct_left)
+)
+combined_lr$study = as.factor(combined_lr$study)
+
+table(combined_lr$study)
+
+## overall left-click rate, both studies pooled, against chance (50%)
+t.test(combined_lr$pct_left, mu = 50)
+
+## does the left-click rate differ between studies (study dummy)?
+mod_lr = lm(pct_left ~ study, data = combined_lr)
+summary(mod_lr)
+```
+
+# Exploratory: Cross-study comparisons
+
+Exploratory, not preregistered. We compare the SVO type distribution and the mediation results (search mediating the SVO-choice relation) across all three studies.
+
+## SVO type distribution: hypothetical (Pilot Study) vs. incentivized (Study 1, Study 2)
+
+```{r}
+## Classify a raw SVO angle (in degrees) into the four standard SVO types,
+## using the same cutoffs already used throughout the Pilot Study, Study 1, and Study 2 for the
+## individual per-study demographic breakdowns (e.g. "57% cooperative").
+## Standard 5-category SVO classification, matching the sadistic/competitive/
+## individualistic/cooperative/altruistic bands already used in the Study
+## 1-3 figure captions: sadistic (-90,-67.5], competitive (-67.5,-22.5],
+## individualistic [-22.5,22.5], cooperative (22.5,67.5], altruistic (67.5,90].
+## (Previously sadistic and altruistic were merged into one "rare tails"
+## category for the cross-study table, but that combined two opposite,
+## clearly distinct SVO types just because each alone is a small cell count.)
+classify_svo = function(x) {
+  ifelse(x > 67.5, "altruistic",
+  ifelse(x > 22.5 & x <= 67.5, "cooperative",
+  ifelse(x >= -22.5 & x <= 22.5, "individualistic",
+  ifelse(x >= -67.5 & x < -22.5, "competitive",
+  "sadistic"))))
+}
+
+## Apply the same classification to each study's primary SVO variable.
+## The Pilot Study and Study 1 use the (single) SVO ring-measure angle; Study 2 uses the
+## averaged ring+slider angle (see "Study 2 used a different..." note above
+## for why Study 2's measures are averaged while Study 1's are kept separate).
+s1_type = classify_svo(res$SVO_part)
+s2_type = classify_svo(res_fin$SVO_part)
+s3_type = classify_svo(svo_gender_s3$SVO)
+
+## Raw counts and percentages per study (feeds the "SVO type distribution"
+## rows of the cross-study comparison table in the manuscript).
+table(s1_type)
+round(prop.table(table(s1_type))*100,1)
+
+table(s2_type)
+round(prop.table(table(s2_type))*100,1)
+
+table(s3_type)
+round(prop.table(table(s3_type))*100,1)
+
+## --- Formal test of Reviewer 1's speculation ---
+## Reviewer 1 wondered whether Pilot Study's hypothetical (non-incentivized)
+## choices would overestimate cooperative/altruistic tendencies compared to
+## the incentivized Study 1 and Study 2. We test this directly by comparing the
+## proportion classified as "cooperative" between studies.
+coop_s1 = sum(s1_type == "cooperative"); n_s1 = length(s1_type)
+coop_s2 = sum(s2_type == "cooperative"); n_s2 = length(s2_type)
+coop_s3 = sum(s3_type == "cooperative"); n_s3 = length(s3_type)
+
+## Main test: Pilot Study (hypothetical) vs. Study 1+Study 2 pooled (incentivized).
+prop.test(c(coop_s1, coop_s2 + coop_s3), c(n_s1, n_s2 + n_s3))
+
+## Same comparison, but Pilot Study vs. each incentivized study separately,
+## in case the pooled test masks a difference specific to one study.
+prop.test(c(coop_s1, coop_s2), c(n_s1, n_s2))
+prop.test(c(coop_s1, coop_s3), c(n_s1, n_s3))
+
+## Omnibus check: does the FULL SVO type distribution (all four categories,
+## not just "cooperative" vs. not) differ across the three studies?
+combined_type = data.frame(
+  study = c(rep("Pilot Study", n_s1), rep("Study 1", n_s2), rep("Study 2", n_s3)),
+  type = c(s1_type, s2_type, s3_type)
+)
+table(combined_type$study, combined_type$type)
+chisq.test(table(combined_type$study, combined_type$type))
+```
+
+## Mediation results across all three studies
+
+```{r}
+## This chunk re-derives and re-runs each study's own mediation model
+## (already reported individually in each study's results section above)
+## purely so all three sets of results are available together in one place,
+## to build the "Mediation" rows of the cross-study comparison table.
+## The mediation logic (predictor/mediator/outcome and 1,000-resample
+## bootstrap) is identical to what each study section already does; nothing
+## new is computed here beyond re-running and collecting the output.
+
+## --- Pilot Study: ASE (own-favoring search %) mediating SVO -> choice ---
+## Rebuild the per-item choice matrix (same recoding as in the Pilot Study
+## "Correlation between ASE, SVO, and choice" section): raw responses come
+## in triplets of 3 columns per item; keep only the 2 "choice" columns per
+## item (drop the 1 "search" column via the seq(1,72,3) exclusion), recode
+## the raw 2/3/4-valued responses down to a simple 0/1 "chose prosocial
+## option" indicator, and drop the 4 non-diagnostic items (12,13,19,20).
+choice_s_1 = dats_s1[,39:110]
+choice_s_1 = (choice_s_1[,-seq(1,72,3)])
+choice_s_1 = matrix(ifelse(unlist(choice_s_1) == -77,0, unlist(choice_s_1)),ncol=ncol(choice_s_1))
+choice_s_1_single = numeric()
+for(loop_single in 1 : (ncol(choice_s_1)/2)){
+  choice_s_1_single = cbind(choice_s_1_single, rowSums(choice_s_1[,(1:2)+(2*(loop_single-1))]))
+}
+choice_s_1_single = ifelse(choice_s_1_single == 4,1,choice_s_1_single)
+choice_s_1_single = ifelse(choice_s_1_single == 3,2,choice_s_1_single)
+choice_s_1_single = ifelse(choice_s_1_single == 2,1,0)
+choice_s_1_single_diagn = choice_s_1_single[,-c(12,13,19,20)]
+
+## treat = SVO, mediator = ASE (% own-favoring search), outcome = % choosing
+## the prosocial option across trials.
+med_data_s1 = data.frame("choice" = rowMeans(choice_s_1_single_diagn), "SVO" = res$SVO_part, "ASE" = res$ASE_pros_m)
+fit.mediator.s1 = lm(ASE~SVO,data=med_data_s1)
+fit.dv.s1 = lm(choice~SVO+ASE,data=med_data_s1)
+results_s1 = mediate(fit.mediator.s1, fit.dv.s1, treat="SVO", mediator="ASE", boot=T)
+summary(results_s1)
+
+## --- Study 1: ASE mediating SVO -> choice (same logic, Study 1 data) ---
+## `choice` here is Study 1's already-recoded item-level choice matrix
+## (built earlier in the Study 1 section); just drop the 4 non-diagnostic
+## items and recode to 0/1 as in Study 1.
+choice_s_2 = choice[,-c(12,13,19,20)]
+choice_s_2_01 = ifelse(choice_s_2 == 2,1,0)
+med_data_s2 = data.frame("choice" = rowMeans(choice_s_2_01), "SVO" = SVO_part, "ASE" = score_indiv_search)
+fit.mediator.s2 = lm(ASE~SVO,data=med_data_s2)
+fit.dv.s2 = lm(choice~SVO+ASE,data=med_data_s2)
+results_s2 = mediate(fit.mediator.s2, fit.dv.s2, treat="SVO", mediator="ASE", boot=T)
+summary(results_s2)
+
+## --- Study 2: search mediating SVO -> choice of the higher-own-payoff option ---
+## Different DV/mediator naming than the Pilot Study/Study 1 because Study 2's richer
+## paradigm scores things per-participant directly in `attr_sear_sc`.
+## treat = mean_angle (averaged SVO); mediator = score_indiv_search (# of
+## trials the first search targeted the higher-own-payoff option, Option A /
+## Option 2); outcome = pct_chose_a, the raw proportion (0-1) of trials the
+## FINAL choice was Option A - deliberately NOT the "selfish/prosocial/
+## dominant/inferior" type_choice_final classification, because that
+## classification is itself partly computed from what search had revealed
+## (see the note above where pct_chose_a is built). Using the raw choice
+## instead keeps mediator and outcome as independently-defined constructs,
+## avoiding circularity between them.
+fit.mediator.s3 = lm(score_indiv_search~mean_angle,data=attr_sear_sc)
+fit.dv.s3 = lm(pct_chose_a~mean_angle+score_indiv_search,data=attr_sear_sc)
+results_s3 = mediate(fit.mediator.s3, fit.dv.s3, treat="mean_angle", mediator="score_indiv_search", boot=T)
+summary(results_s3)
+```
+
+# Appendix A: Items
+
+```{r}
+tasks_svo_table_1 =  cbind(1:24,tasks_svo)
+tasks_svo_table_2 = numeric()
+
+for(loop in 1:24){
+
+  conc = tasks[loop,]
+  open = tasks_compl[loop,]
+  open = open[is.na(conc) == T]
+
+  conc = conc[is.na(conc) == F]
+  conc = as.character(conc)
+  open = paste("(",open,")",sep="")
+
+
+  tasks_svo_table_2 =
+    rbind(tasks_svo_table_2,
+          c(conc[1],open[1],conc[2:3],open[2],conc[4]))
+
+}
+
+tasks_svo_table_3 = matrix(as.character(unlist(tasks_svo_table_3)),
+                           ncol=ncol(tasks_svo_table_3))
+
+tasks_svo_table_3[,2] = paste("(",tasks_svo_table_3[,2],")",sep="")
+tasks_svo_table_3[,5] = paste("(",tasks_svo_table_3[,5],")",sep="")
+
+cor.test(table_perc_search_s1[1:20],table_perc_search_s2[1:20], method = "spearman")
+plot(table_perc_search_s1[1:20],table_perc_search_s2[1:20])
+
+study1_table = cbind(rbind(tasks_svo_table_1[incl==1,],tasks_svo_table_1[incl==0,]),
+                     rbind(tasks_svo_table_2[incl==1,],tasks_svo_table_2[incl==0,]),
+                     table_perc_search_s1)
+study1_table[,1] = 1:24
+rownames(study1_table) <- NULL
+
+study2_table = cbind(rbind(tasks_svo_table_1[incl==1,],tasks_svo_table_1[incl==0,]),
+                     rbind(tasks_svo_table_3[incl==1,],tasks_svo_table_3[incl==0,]),
+                     table_perc_search_s2)
+study2_table[,1] = 1:24
+rownames(study2_table) <- NULL
+```
+
+## Pilot Study
+
+```{r}
+kbl(study1_table,
+    format = "latex",
+    booktabs = TRUE,
+    col.names = c("Item","Own", "Other's", "Own", "Other's", "Own 1", "Own 2","Other's", "Own 1", "Own 2", "Other's",""),
+    align = c("l", "c", "c", "c","c","c", "c","c", "c","c","c","c"),
+    caption="."
+) %>%
+  add_header_above(c(" ", "Payoff Option 1" = 2, "Payoff Option 2" = 2,"Payoff Option 1" = 3, "Payoff Option 2" = 3,"% Opt 1" = 1)) %>%
+  add_header_above(c(" ", "SVO Ring Measure" = 4,"ASE Pilot Study"=7))
+```
+
+```{r, results = 'asis'}
+kbl(study1_table,
+    format = "html",
+    col.names = c("Item","Own", "Other's", "Own", "Other's", "Own 1", "Own 2","Other's", "Own 1", "Own 2", "Other's",""),
+    align = c("l", "c", "c", "c","c","c", "c","c", "c","c","c","c"),
+    caption="."
+) %>%
+  add_header_above(c(" ", "Payoff Option 1" = 2, "Payoff Option 2" = 2,"Payoff Option 1" = 3, "Payoff Option 2" = 3,"% Opt 1" = 1)) %>%
+  add_header_above(c(" ", "SVO Ring Measure" = 4,"ASE Pilot Study"=7)) %>%
+  kable_styling(bootstrap_options = c("striped","hover"), full_width = FALSE) %>%
+  column_spec(1:12, width = "4em")
+```
+
+## Study 1
+
+```{r}
+kbl(study2_table,
+    format = "latex",
+    booktabs = TRUE,
+    col.names = c("Item","Own", "Other's", "Own", "Other's", "Own 1", "Own 2","Other's", "Own 1", "Own 2", "Other's",""),
+    align = c("l", "c", "c", "c","c","c", "c","c", "c","c","c","c"),
+    caption="."
+) %>%
+  add_header_above(c(" ", "Payoff Option 1" = 2, "Payoff Option 2" = 2,"Payoff Option 1" = 3, "Payoff Option 2" = 3,"% Opt 1" = 1)) %>%
+  add_header_above(c(" ", "SVO Ring Measure" = 4,"ASE Study 1"=7))
+```
+
+```{r, results = 'asis'}
+kbl(study2_table,
+    format = "html",
+    col.names = c("Item","Own", "Other's", "Own", "Other's", "Own 1", "Own 2","Other's", "Own 1", "Own 2", "Other's",""),
+    align = c("l", "c", "c", "c","c","c", "c","c", "c","c","c","c"),
+    caption="."
+) %>%
+  add_header_above(c(" ", "Payoff Option 1" = 2, "Payoff Option 2" = 2,"Payoff Option 1" = 3, "Payoff Option 2" = 3,"% Opt 1" = 1)) %>%
+  add_header_above(c(" ", "SVO Ring Measure" = 4,"ASE Study 1"=7)) %>%
+  kable_styling(bootstrap_options = c("striped","hover"), full_width = FALSE) %>%
+  column_spec(1:12, width = "4em")
+```
+
+## Study 2
+
+Study 2 used the same 24-item SVO Ring Measure as the Pilot Study and Study 1, plus 24 fixed item templates for the concealed-information search task (identical self/other payoffs for all participants; only left/right presentation was randomized). The SVO Ring Measure and the search task each have their own Option 1/Option 2 pairing. For the search task, as in the Pilot Study and Study 1, Option 1 is the option with the visibly higher other's payoff and Option 2 is the option with the visibly higher own payoff. The table below combines both measures. For the search task, the open (visible before any search) amount is shown directly, with the two concealed amounts (each independently revealable through search, in either order, and not necessarily both) shown in parentheses; all three sum to the final payoff. The last column reports the percentage of participants whose first search targeted Option 1 (\% Opt 1), the same measure as in the Pilot Study and Study 1.
+
+```{r}
+ring_items_table = ring %>%
+  mutate(item = as.numeric(item),
+         self_A = as.numeric(gsub(",", ".", self_A)),
+         other_A = as.numeric(gsub(",", ".", other_A)),
+         self_B = as.numeric(gsub(",", ".", self_B)),
+         other_B = as.numeric(gsub(",", ".", other_B))) %>%
+  distinct(item, self_A, other_A, self_B, other_B) %>%
+  arrange(item)
+
+items_study_3 = data_search_incl %>%
+  group_by(item) %>%
+  summarise(
+    self_a_open = round(first(start_self_a)/100, 2),
+    self_a_hidden1 = round(first(hidden_self_a_1)/100, 2),
+    self_a_hidden2 = round(first(hidden_self_a_2)/100, 2),
+    other_a_open = round(first(start_other_a)/100, 2),
+    other_a_hidden1 = round(first(hidden_other_a_1)/100, 2),
+    other_a_hidden2 = round(first(hidden_other_a_2)/100, 2),
+    self_b_open = round(first(start_self_b)/100, 2),
+    self_b_hidden1 = round(first(hidden_self_b_1)/100, 2),
+    self_b_hidden2 = round(first(hidden_self_b_2)/100, 2),
+    other_b_open = round(first(start_other_b)/100, 2),
+    other_b_hidden1 = round(first(hidden_other_b_1)/100, 2),
+    other_b_hidden2 = round(first(hidden_other_b_2)/100, 2),
+    percent_search_1 = round(100 * mean(search_1_opt == "b", na.rm = TRUE), 1)
+  ) %>%
+  mutate(
+    item = as.numeric(item),
+    self_a_hidden = paste0("(", self_a_hidden1, " + ", self_a_hidden2, ")"),
+    other_a_hidden = paste0("(", other_a_hidden1, " + ", other_a_hidden2, ")"),
+    self_b_hidden = paste0("(", self_b_hidden1, " + ", self_b_hidden2, ")"),
+    other_b_hidden = paste0("(", other_b_hidden1, " + ", other_b_hidden2, ")")
+  ) %>%
+  arrange(item) %>%
+  dplyr::select(item, self_b_open, self_b_hidden, other_b_open, other_b_hidden,
+                self_a_open, self_a_hidden, other_a_open, other_a_hidden, percent_search_1)
+
+study3_table = left_join(ring_items_table, items_study_3, by = "item")
+
+col_names_3 = c("Item","Own", "Other's", "Own", "Other's",
+                "Own (open)", "Own (hidden)", "Other's (open)", "Other's (hidden)",
+                "Own (open)", "Own (hidden)", "Other's (open)", "Other's (hidden)",
+                "% Opt 1")
+
+kbl(study3_table,
+    format = "latex",
+    booktabs = TRUE,
+    col.names = col_names_3,
+    align = c("l", rep("c", 13)),
+    caption="."
+) %>%
+  add_header_above(c(" ", "Option 1" = 2, "Option 2" = 2, "Option 1" = 4, "Option 2" = 4, " " = 1)) %>%
+  add_header_above(c(" ", "SVO Ring Measure" = 4, "ASE Study 2" = 9))
+```
+
+```{r, results = 'asis'}
+kbl(study3_table,
+    format = "html",
+    col.names = col_names_3,
+    align = c("l", rep("c", 13)),
+    caption="."
+) %>%
+  add_header_above(c(" ", "Option 1" = 2, "Option 2" = 2, "Option 1" = 4, "Option 2" = 4, " " = 1)) %>%
+  add_header_above(c(" ", "SVO Ring Measure" = 4, "ASE Study 2" = 9)) %>%
+  kable_styling(bootstrap_options = c("striped","hover"), full_width = FALSE) %>%
+  column_spec(1:14, width = "4em")
+```
+
+Study 2, Session 1 also administered the 15-item extended Social Value Orientation Slider Measure \parencite{murphyMeasuringSocialValue2011a}. Each item offers nine response options with own and other's payoffs that vary systematically across positions; participants picked one option per item, and the resulting payoffs across all 15 items were used to calculate the SVO slider angle. The item template below (`data/slider_items_ses1_study3.csv`) was extracted directly from the raw Session 1 experiment log (every participant who selected a given option on a given item received the identical, fixed payoff, confirmed by checking that choice\_self/choice\_other never varied across participants for the same item x option combination) - it is not inferred or interpolated.
+
+```{r}
+slider_template = slider_items %>%
+  mutate(across(c(starts_with("self_"), starts_with("other_")), ~ as.numeric(gsub(",", ".", .)))) %>%
+  dplyr::select(item, starts_with("self_"), starts_with("other_")) %>%
+  arrange(item)
+
+col_names_slider = c("Item", paste0(1:9), paste0(1:9))
+
+kbl(slider_template,
+    format = "latex",
+    booktabs = TRUE,
+    col.names = col_names_slider,
+    align = c("l", rep("c", 18)),
+    caption="."
+) %>%
+  add_header_above(c(" ", "Own payoff (options 1-9)" = 9, "Other's payoff (options 1-9)" = 9))
+```
+
+```{r, results = 'asis'}
+kbl(slider_template,
+    format = "html",
+    col.names = col_names_slider,
+    align = c("l", rep("c", 18)),
+    caption="."
+) %>%
+  add_header_above(c(" ", "Own payoff (options 1-9)" = 9, "Other's payoff (options 1-9)" = 9)) %>%
+  kable_styling(bootstrap_options = c("striped","hover"), full_width = FALSE) %>%
+  column_spec(1:19, width = "3em")
+```
