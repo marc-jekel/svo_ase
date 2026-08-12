@@ -2429,6 +2429,37 @@ table(data_search_incl$choice[data_search_incl$type_choice_after1 != "undecided 
 prop.table(table(data_search_incl$choice[data_search_incl$type_choice_after1 != "undecided yet"], data_search_incl$type_choice_after1[data_search_incl$type_choice_after1 != "undecided yet"], data_search_incl$search_1_opt[data_search_incl$type_choice_after1 != "undecided yet"]),1)
 ```
 
+```{r}
+## Named breakdown of the table above, restricted to trials in which the
+## participant's first search targeted Option 1 (search_1_opt == "b", the
+## option with the visibly lower own payoff / higher other's payoff at that
+## point) and the participant then chose immediately, without a second
+## search (type_choice_after1 != "undecided yet"). type_choice_after1
+## classifies the CHOSEN side relative to the unchosen side based on the
+## currently visible (open + revealed) amounts at the moment of choice:
+## "dominant" = chosen side now higher on both dimensions, "inferior" =
+## chosen side now lower on both dimensions (an apparent anomaly), "selfish"/
+## "prosocial" = chosen side trades one dimension for the other.
+sub_own_reveal = subset(data_search_incl, search_1_opt == "b" & type_choice_after1 != "undecided yet")
+
+n_sub = nrow(sub_own_reveal)
+b_still_worse   = sum(sub_own_reveal$choice == "b" & sub_own_reveal$type_choice_after1 == "prosocial") # chose the searched (Option 1) option even though it remained worse for self after the reveal -- a real self-sacrificing choice
+b_now_better    = sum(sub_own_reveal$choice == "b" & sub_own_reveal$type_choice_after1 == "dominant")  # chose the searched option; the reveal made it better for self too, so no sacrifice was actually required
+a_selfish_switch = sum(sub_own_reveal$choice == "a" & sub_own_reveal$type_choice_after1 == "selfish")  # switched to the other, purely self-favoring option
+a_inferior_switch = sum(sub_own_reveal$choice == "a" & sub_own_reveal$type_choice_after1 == "inferior") # switched to the unsearched option even though the reveal had just shown the searched option to be better on both dimensions
+
+cat(sprintf("n trials in this subgroup: %d\n", n_sub))
+cat(sprintf("chose searched option, still worse for self (self-sacrificing choice): %d (%.1f%%)\n", b_still_worse, 100*b_still_worse/n_sub))
+cat(sprintf("chose searched option, now better for self too (no sacrifice): %d (%.1f%%)\n", b_now_better, 100*b_now_better/n_sub))
+cat(sprintf("switched to the other, purely self-favoring option: %d (%.1f%%)\n", a_selfish_switch, 100*a_selfish_switch/n_sub))
+cat(sprintf("switched away from the now-dominant searched option: %d (%.1f%%)\n", a_inferior_switch, 100*a_inferior_switch/n_sub))
+
+n_participants_sub = length(unique(sub_own_reveal$uniqueID))
+n_participants_with_switch_from_dominant = length(unique(sub_own_reveal$uniqueID[sub_own_reveal$choice == "a" & sub_own_reveal$type_choice_after1 == "inferior"]))
+cat(sprintf("participants in this subgroup: %d; with >= 1 switch-away-from-dominant choice: %d (%.1f%%)\n",
+            n_participants_sub, n_participants_with_switch_from_dominant, 100*n_participants_with_switch_from_dominant/n_participants_sub))
+```
+
 
 
 ### Correlation between SVO and search target
