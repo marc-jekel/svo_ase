@@ -2160,7 +2160,7 @@ data_search_incl = left_join(data_search_incl, attr_sear_sc%>%dplyr::select(uniq
 #n
 nrow(demo_inkl)
 demo_inkl$age_t1[demo_inkl$age_t1 < 18] = NA
-# Age was not preregistered as an exclusion criterion, and all participants recruited through Decision Lab Cologne (DLC) are required to be at least 18 years old, so age itself was not screened during data collection. Two participants reported implausible ages of 11 and 15; cross-referencing the original recruitment records indicates these participants were actually 20 and 21 years old (a data-entry error, possibly a younger sibling using the account), so these two values are set to NA above rather than excluding the participants outright, since their strategy descriptions were otherwise consistent with genuine participation.
+# Age was not preregistered as an exclusion criterion, and all participants recruited through Decision Lab Cologne (DLC) are required to be at least 18 years old, so age itself was not screened during data collection. Two participants reported implausible ages of 11 and 15; cross-referencing the original recruitment records indicates these participants were actually 20 and 21 years old (a data-entry error), so these two values are set to NA above rather than excluding the participants outright, since their strategy descriptions were otherwise consistent with genuine participation.
 summary(demo_inkl$age_t1)
 sd(demo_inkl$age_t1, na.rm = T)
 table(demo_inkl$gender_t1)
